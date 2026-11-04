@@ -1,0 +1,194 @@
+{
+  "name": "W04 - Reintentos DLQ",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "minutes", "minutesInterval": 15 }] }
+      },
+      "id": "a0400000-0000-0000-0000-000000000001",
+      "name": "Cron 15min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT r.id AS reset_id, r.leak_hit_id, r.intentos, h.email_corporativo, h.breach_origen\nFROM resets r\nJOIN leak_hits h ON h.id = r.leak_hit_id\nWHERE r.resultado = 'reintento'\n  AND (r.proximo_intento IS NULL OR r.proximo_intento <= now())\nORDER BY r.proximo_intento NULLS FIRST\nLIMIT 100;",
+        "options": {}
+      },
+      "id": "a0400000-0000-0000-0000-000000000002",
+      "name": "Leer Pendientes",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [460, 300],
+      "credentials": { "postgres": { "id": "radar_pg", "name": "Radar PG" } },
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": { "batchSize": 1, "options": {} },
+      "id": "a0400000-0000-0000-0000-000000000003",
+      "name": "Loop Pendientes",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst row = $json;\nconst secret = $env.IDP_HMAC_SECRET || '';\nconst resetPayload = { action: 'reset_password', email: row.email_corporativo };\nconst revokePayload = { action: 'revoke_sessions', email: row.email_corporativo };\nconst sign = (b) => crypto.createHmac('sha256', secret).update(JSON.stringify(b)).digest('hex');\nreturn [{ json: { ...row, reset_body: JSON.stringify(resetPayload), reset_sig: sign(resetPayload), revoke_body: JSON.stringify(revokePayload), revoke_sig: sign(revokePayload) } }];"
+      },
+      "id": "a0400000-0000-0000-0000-000000000004",
+      "name": "Prepare Retry",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [940, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.IDP_WEBHOOK_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "X-Radar-Signature", "value": "={{ $json.reset_sig }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.reset_body }}",
+        "options": { "response": { "response": { "neverError": true, "fullResponse": true } } }
+      },
+      "id": "a0400000-0000-0000-0000-000000000005",
+      "name": "Retry Reset",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1180, 220],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.IDP_WEBHOOK_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "X-Radar-Signature", "value": "={{ $json.revoke_sig }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.revoke_body }}",
+        "options": { "response": { "response": { "neverError": true, "fullResponse": true } } }
+      },
+      "id": "a0400000-0000-0000-0000-000000000006",
+      "name": "Retry Revoke",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1180, 380],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const reset = $('Retry Reset').first().json;\nconst revoke = $('Retry Revoke').first().json;\nconst row = $('Prepare Retry').first().json;\nconst ok = reset.statusCode >= 200 && reset.statusCode < 300 && revoke.statusCode >= 200 && revoke.statusCode < 300;\nconst intentos = (row.intentos || 1) + 1;\nconst schedule = [15, 30, 60, 240, 1440];\nconst agotado = intentos >= 5;\nconst proximo = agotado ? null : new Date(Date.now() + schedule[Math.min(intentos - 1, schedule.length - 1)] * 60000).toISOString();\nreturn [{ json: { reset_id: row.reset_id, leak_hit_id: row.leak_hit_id, email: row.email_corporativo, ok, intentos, agotado, proximo_intento: proximo } }];"
+      },
+      "id": "a0400000-0000-0000-0000-000000000007",
+      "name": "Evaluate Retry",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1420, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE resets\nSET resultado = CASE WHEN $2 THEN 'exitoso'::reset_resultado WHEN $3 THEN 'fallido'::reset_resultado ELSE 'reintento'::reset_resultado END,\n    intentos = $4,\n    proximo_intento = $5::timestamptz,\n    idp_respuesta = $6::jsonb\nWHERE id = $1::uuid;",
+        "options": { "queryReplacement": "={{ [ $json.reset_id, $json.ok, $json.agotado, $json.intentos, $json.proximo_intento, JSON.stringify({ retry: true }) ] }}" }
+      },
+      "id": "a0400000-0000-0000-0000-000000000008",
+      "name": "Update Reset",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1660, 300],
+      "credentials": { "postgres": { "id": "radar_pg", "name": "Radar PG" } }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "a0400000-0000-0000-0000-000000000009",
+      "name": "IF Exitoso",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1900, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leak_hits SET estado = 'contenido', fecha_contencion = now(), actualizado_en = now() WHERE id = $1::uuid;",
+        "options": { "queryReplacement": "={{ [$json.leak_hit_id] }}" }
+      },
+      "id": "a0400000-0000-0000-0000-000000000010",
+      "name": "Mark Contenido",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [2140, 220],
+      "credentials": { "postgres": { "id": "radar_pg", "name": "Radar PG" } }
+    },
+    {
+      "parameters": {
+        "workflowId": "W06_ALERTA_ADMIN",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "mensaje": "={{ 'Reset agotado para leak ' + $('Evaluate Retry').first().json.leak_hit_id + ' tras ' + $('Evaluate Retry').first().json.intentos + ' intentos' }}",
+            "severidad": "alta"
+          }
+        }
+      },
+      "id": "a0400000-0000-0000-0000-000000000011",
+      "name": "Alert Agotado",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [2140, 380]
+    }
+  ],
+  "connections": {
+    "Cron 15min": { "main": [[{ "node": "Leer Pendientes", "type": "main", "index": 0 }]] },
+    "Leer Pendientes": { "main": [[{ "node": "Loop Pendientes", "type": "main", "index": 0 }]] },
+    "Loop Pendientes": { "main": [[{ "node": "Prepare Retry", "type": "main", "index": 0 }]] },
+    "Prepare Retry": {
+      "main": [[
+        { "node": "Retry Reset", "type": "main", "index": 0 },
+        { "node": "Retry Revoke", "type": "main", "index": 0 }
+      ]]
+    },
+    "Retry Reset": { "main": [[{ "node": "Evaluate Retry", "type": "main", "index": 0 }], []] },
+    "Retry Revoke": { "main": [[{ "node": "Evaluate Retry", "type": "main", "index": 0 }], []] },
+    "Evaluate Retry": { "main": [[{ "node": "Update Reset", "type": "main", "index": 0 }]] },
+    "Update Reset": { "main": [[{ "node": "IF Exitoso", "type": "main", "index": 0 }]] },
+    "IF Exitoso": {
+      "main": [
+        [{ "node": "Mark Contenido", "type": "main", "index": 0 }],
+        [{ "node": "Alert Agotado", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "W12_ERROR_HANDLER"
+  },
+  "active": false,
+  "tags": ["radar", "retry"]
+}

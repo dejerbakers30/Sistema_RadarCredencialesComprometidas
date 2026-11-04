@@ -1,0 +1,474 @@
+{
+  "name": "W03 - Contencion Automatica",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "leak_hit_id"
+            },
+            {
+              "name": "email"
+            },
+            {
+              "name": "breach"
+            }
+          ]
+        }
+      },
+      "id": "a0300000-0000-0000-0000-000000000001",
+      "name": "Input",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id FROM resets WHERE leak_hit_id = $1::uuid AND resultado = 'exitoso' LIMIT 1;",
+        "options": {
+          "queryReplacement": "={{ [$json.leak_hit_id] }}"
+        }
+      },
+      "id": "a0300000-0000-0000-0000-000000000002",
+      "name": "Check Ya Contenido",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        460,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "radar_pg",
+          "name": "Radar PG"
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "a0300000-0000-0000-0000-000000000003",
+      "name": "IF No Contenido",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        700,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst input = $('Input').first().json;\nconst secret = $env.IDP_HMAC_SECRET || '';\nconst resetPayload = { action: 'reset_password', email: input.email };\nconst revokePayload = { action: 'revoke_sessions', email: input.email };\nconst sign = (body) => crypto.createHmac('sha256', secret).update(JSON.stringify(body)).digest('hex');\nreturn [{ json: {\n  ...input,\n  reset_body: JSON.stringify(resetPayload),\n  reset_sig: sign(resetPayload),\n  revoke_body: JSON.stringify(revokePayload),\n  revoke_sig: sign(revokePayload)\n}}];"
+      },
+      "id": "a0300000-0000-0000-0000-000000000004",
+      "name": "Prepare IdP Calls",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        940,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.IDP_WEBHOOK_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Radar-Signature",
+              "value": "={{ $json.reset_sig }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.reset_body }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "fullResponse": true
+            }
+          },
+          "retry": {
+            "retry": {
+              "enabled": true,
+              "maxRetries": 2,
+              "waitBetweenRetries": 3000
+            }
+          }
+        }
+      },
+      "id": "a0300000-0000-0000-0000-000000000005",
+      "name": "Reset Password",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1180,
+        220
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.IDP_WEBHOOK_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Radar-Signature",
+              "value": "={{ $json.revoke_sig }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.revoke_body }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "fullResponse": true
+            }
+          },
+          "retry": {
+            "retry": {
+              "enabled": true,
+              "maxRetries": 2,
+              "waitBetweenRetries": 3000
+            }
+          }
+        }
+      },
+      "id": "a0300000-0000-0000-0000-000000000006",
+      "name": "Revoke Sessions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1180,
+        380
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const reset = $('Reset Password').first().json;\nconst revoke = $('Revoke Sessions').first().json;\nconst input = $('Prepare IdP Calls').first().json;\nconst resetOk = reset.statusCode >= 200 && reset.statusCode < 300;\nconst revokeOk = revoke.statusCode >= 200 && revoke.statusCode < 300;\nconst ok = resetOk && revokeOk;\nreturn [{ json: {\n  leak_hit_id: input.leak_hit_id,\n  email: input.email,\n  breach: input.breach,\n  ok,\n  detalle: {\n    reset_password: { status: reset.statusCode, ok: resetOk },\n    revoke_sessions: { status: revoke.statusCode, ok: revokeOk }\n  }\n}}];"
+      },
+      "id": "a0300000-0000-0000-0000-000000000007",
+      "name": "Evaluate Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1420,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO resets (leak_hit_id, timestamp, metodo, resultado, idp_respuesta, intentos, proximo_intento)\nVALUES ($1::uuid, now(), 'automatico', $2::reset_resultado, $3::jsonb, 1,\n        CASE WHEN $2 = 'reintento' THEN now() + interval '15 minutes' ELSE NULL END)\nRETURNING id, resultado;",
+        "options": {
+          "queryReplacement": "={{ [ $json.leak_hit_id, $json.ok ? 'exitoso' : 'reintento', JSON.stringify($json.detalle) ] }}"
+        }
+      },
+      "id": "a0300000-0000-0000-0000-000000000008",
+      "name": "Insert Reset",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1660,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "radar_pg",
+          "name": "Radar PG"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leak_hits\nSET estado = CASE WHEN $2 THEN 'contenido'::leak_estado ELSE estado END,\n    fecha_contencion = CASE WHEN $2 THEN now() ELSE fecha_contencion END,\n    actualizado_en = now()\nWHERE id = $1::uuid;",
+        "options": {
+          "queryReplacement": "={{ [ $('Evaluate Result').first().json.leak_hit_id, $('Evaluate Result').first().json.ok ] }}"
+        }
+      },
+      "id": "a0300000-0000-0000-0000-000000000009",
+      "name": "Update Leak State",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1900,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "radar_pg",
+          "name": "Radar PG"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $('Evaluate Result').first().json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "a0300000-0000-0000-0000-000000000010",
+      "name": "IF Exitoso",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2140,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": "W15_NOTIFICACION",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "destinatario": "={{ $('Evaluate Result').first().json.email }}",
+            "asunto": "Aviso de seguridad: credencial filtrada",
+            "cuerpo": "={{ 'Hola,\\n\\nSe ha detectado tu correo en la filtración \"' + $('Evaluate Result').first().json.breach + '\". Se ha forzado el restablecimiento de tu contraseña y la invalidación de tus sesiones.\\n\\nSi no reconoces esta actividad, contacta con seguridad@example.com.' }}",
+            "canal": "email",
+            "leak_hit_id": "={{ $('Evaluate Result').first().json.leak_hit_id }}"
+          }
+        }
+      },
+      "id": "a0300000-0000-0000-0000-000000000011",
+      "name": "Notify User",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        2380,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": "W13_AUDITORIA",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "modulo": "resets",
+            "accion": "auto_contain",
+            "resultado": "={{ $('Evaluate Result').first().json.ok ? 'ok' : 'error' }}",
+            "entidad": "leak_hits",
+            "entidad_id": "={{ $('Evaluate Result').first().json.leak_hit_id }}",
+            "usuario_email": null,
+            "detalle": "={{ JSON.stringify($('Evaluate Result').first().json.detalle) }}"
+          }
+        }
+      },
+      "id": "a0300000-0000-0000-0000-000000000012",
+      "name": "Audit Contain",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        2380,
+        380
+      ]
+    }
+  ],
+  "connections": {
+    "Input": {
+      "main": [
+        [
+          {
+            "node": "Check Ya Contenido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Ya Contenido": {
+      "main": [
+        [
+          {
+            "node": "IF No Contenido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF No Contenido": {
+      "main": [
+        [
+          {
+            "node": "Prepare IdP Calls",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Prepare IdP Calls": {
+      "main": [
+        [
+          {
+            "node": "Reset Password",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Revoke Sessions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reset Password": {
+      "main": [
+        [
+          {
+            "node": "Evaluate Result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Revoke Sessions": {
+      "main": [
+        [
+          {
+            "node": "Evaluate Result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Evaluate Result": {
+      "main": [
+        [
+          {
+            "node": "Insert Reset",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Reset": {
+      "main": [
+        [
+          {
+            "node": "Update Leak State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Leak State": {
+      "main": [
+        [
+          {
+            "node": "IF Exitoso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Exitoso": {
+      "main": [
+        [
+          {
+            "node": "Notify User",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Notify User": {
+      "main": [
+        [
+          {
+            "node": "Audit Contain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "W12_ERROR_HANDLER"
+  },
+  "active": false,
+  "tags": [
+    {
+      "id": "radar",
+      "name": "radar"
+    },
+    {
+      "id": "contain",
+      "name": "contain"
+    }
+  ],
+  "id": "W03_contain"
+}

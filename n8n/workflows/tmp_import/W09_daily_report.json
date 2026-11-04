@@ -1,0 +1,221 @@
+{
+  "name": "W09 - Reporte Diario",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * *"
+            }
+          ]
+        }
+      },
+      "id": "a0900000-0000-0000-0000-000000000001",
+      "name": "Cron 07:00 UTC",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const hoy = new Date();\nconst ayer = new Date(hoy.getTime() - 24 * 3600 * 1000);\nconst fmt = (d) => d.toISOString().slice(0, 10);\nreturn [{ json: { periodo_desde: fmt(ayer), periodo_hasta: fmt(hoy) } }];"
+      },
+      "id": "a0900000-0000-0000-0000-000000000002",
+      "name": "Compute Period",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.RADAR_API_BASE }}/reports",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ tipo: 'operacional', formato: 'pdf', periodo_desde: $json.periodo_desde, periodo_hasta: $json.periodo_hasta }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "id": "a0900000-0000-0000-0000-000000000003",
+      "name": "Generate Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        700,
+        300
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $input.first().json;\nconst body = typeof resp.body === 'string' ? JSON.parse(resp.body) : resp.body;\nreturn [{ json: { report_id: body.id, periodo_desde: body.periodo_desde, periodo_hasta: body.periodo_hasta } }];"
+      },
+      "id": "a0900000-0000-0000-0000-000000000004",
+      "name": "Extract Report ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        940,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.RADAR_API_BASE }}/reports/{{ $json.report_id }}/download",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "id": "a0900000-0000-0000-0000-000000000005",
+      "name": "Download Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1180,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "radar-creds@example.com",
+        "toEmail": "={{ $env.ADMIN_EMAIL }}",
+        "subject": "=Radar Creds — Reporte diario {{ $('Compute Period').first().json.periodo_hasta }}",
+        "emailType": "text",
+        "message": "Adjunto reporte operacional diario.",
+        "options": {
+          "attachmentsUi": {
+            "attachmentsBinary": [
+              {
+                "property": "data",
+                "name": "reporte_diario.pdf"
+              }
+            ]
+          }
+        }
+      },
+      "id": "a0900000-0000-0000-0000-000000000006",
+      "name": "Email Report",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1420,
+        300
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "radar_smtp",
+          "name": "Radar SMTP"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Cron 07:00 UTC": {
+      "main": [
+        [
+          {
+            "node": "Compute Period",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Period": {
+      "main": [
+        [
+          {
+            "node": "Generate Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Report": {
+      "main": [
+        [
+          {
+            "node": "Extract Report ID",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Email Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Report ID": {
+      "main": [
+        [
+          {
+            "node": "Download Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Report": {
+      "main": [
+        [
+          {
+            "node": "Email Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "W12_ERROR_HANDLER"
+  },
+  "active": false,
+  "tags": [
+    {
+      "id": "radar",
+      "name": "radar"
+    },
+    {
+      "id": "report",
+      "name": "report"
+    }
+  ],
+  "id": "W09_daily_report"
+}

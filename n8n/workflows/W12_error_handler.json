@@ -1,0 +1,70 @@
+{
+  "name": "W12 - Error Handler",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "a1200000-0000-0000-0000-000000000001",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const e = $input.first().json;\nconst workflow = e.workflow?.name || 'desconocido';\nconst node = e.execution?.lastNodeExecuted || 'desconocido';\nconst message = e.execution?.error?.message || 'Error sin mensaje';\nreturn [{ json: { workflow, node, message, ts: new Date().toISOString(), executionId: e.execution?.id } }];"
+      },
+      "id": "a1200000-0000-0000-0000-000000000002",
+      "name": "Format Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "workflowId": "W06_ALERTA_ADMIN",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "mensaje": "={{ 'Fallo en workflow ' + $json.workflow + ' (nodo ' + $json.node + '): ' + $json.message }}",
+            "severidad": "alta"
+          }
+        }
+      },
+      "id": "a1200000-0000-0000-0000-000000000003",
+      "name": "Alert Admin",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "workflowId": "W13_AUDITORIA",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "modulo": "admin",
+            "accion": "workflow_error",
+            "resultado": "error",
+            "entidad": "workflows",
+            "entidad_id": "={{ $json.workflow }}",
+            "usuario_email": null,
+            "detalle": "={{ JSON.stringify($json) }}"
+          }
+        }
+      },
+      "id": "a1200000-0000-0000-0000-000000000004",
+      "name": "Audit Error",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [940, 300]
+    }
+  ],
+  "connections": {
+    "Error Trigger": { "main": [[{ "node": "Format Error", "type": "main", "index": 0 }]] },
+    "Format Error": { "main": [[{ "node": "Alert Admin", "type": "main", "index": 0 }]] },
+    "Alert Admin": { "main": [[{ "node": "Audit Error", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false,
+  "tags": ["radar", "error"]
+}

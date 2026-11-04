@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.env
+
+# Node
+node_modules/
+dist/
+
+# Base de datos y logs
+*.sqlite3
+*.log
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Entorno de editores
+.vscode/
+.idea/

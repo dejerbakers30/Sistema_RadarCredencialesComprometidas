@@ -1,0 +1,20 @@
+{
+  "app": { "name": "Radar de Credenciales" },
+  "nav": {
+    "dashboard": "Panel",
+    "leaks": "Filtraciones",
+    "resets": "Contenciones",
+    "reports": "Reportes",
+    "audit": "Auditoría",
+    "users": "Usuarios",
+    "sources": "Fuentes",
+    "profile": "Perfil"
+  },
+  "common": {
+    "loading": "Cargando…",
+    "error": "Error",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "search": "Buscar"
+  }
+}

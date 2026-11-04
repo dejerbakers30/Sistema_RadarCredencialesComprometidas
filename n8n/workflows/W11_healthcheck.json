@@ -1,0 +1,107 @@
+{
+  "name": "W11 - Healthcheck Fuentes",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "hours", "hoursInterval": 1 }] }
+      },
+      "id": "a1100000-0000-0000-0000-000000000001",
+      "name": "Cron 1h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, nombre, endpoint, activa FROM fuentes WHERE activa = TRUE;",
+        "options": {}
+      },
+      "id": "a1100000-0000-0000-0000-000000000002",
+      "name": "Leer Fuentes",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [460, 300],
+      "credentials": { "postgres": { "id": "radar_pg", "name": "Radar PG" } }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://haveibeenpwned.com/api/v3/breaches",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "user-agent", "value": "RadarCreds/1.0" }
+          ]
+        },
+        "options": { "response": { "response": { "neverError": true, "fullResponse": true } } }
+      },
+      "id": "a1100000-0000-0000-0000-000000000003",
+      "name": "Ping HIBP",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 300],
+      "credentials": { "httpHeaderAuth": { "id": "radar_http_hibp", "name": "HIBP API" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $input.first().json;\nconst ok = resp.statusCode >= 200 && resp.statusCode < 300;\nreturn [{ json: { fuente: 'hibp', status: resp.statusCode, ok, ts: new Date().toISOString() } }];"
+      },
+      "id": "a1100000-0000-0000-0000-000000000004",
+      "name": "Evaluate Health",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [940, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": false,
+              "operator": { "type": "boolean", "operation": "false" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "a1100000-0000-0000-0000-000000000005",
+      "name": "IF Down",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1180, 300]
+    },
+    {
+      "parameters": {
+        "workflowId": "W06_ALERTA_ADMIN",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "mensaje": "={{ 'Fuente ' + $json.fuente + ' no responde (status ' + $json.status + ')' }}",
+            "severidad": "media"
+          }
+        }
+      },
+      "id": "a1100000-0000-0000-0000-000000000006",
+      "name": "Alert Down",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [1420, 220]
+    }
+  ],
+  "connections": {
+    "Cron 1h": { "main": [[{ "node": "Leer Fuentes", "type": "main", "index": 0 }]] },
+    "Leer Fuentes": { "main": [[{ "node": "Ping HIBP", "type": "main", "index": 0 }]] },
+    "Ping HIBP": { "main": [[{ "node": "Evaluate Health", "type": "main", "index": 0 }]] },
+    "Evaluate Health": { "main": [[{ "node": "IF Down", "type": "main", "index": 0 }]] },
+    "IF Down": { "main": [[{ "node": "Alert Down", "type": "main", "index": 0 }], []] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false,
+  "tags": ["radar", "health"]
+}

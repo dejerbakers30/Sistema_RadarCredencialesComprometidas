@@ -1,0 +1,39 @@
+{
+  "name": "W14 - Utils Hash Canonico",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            { "name": "email" },
+            { "name": "breach" },
+            { "name": "fecha_breach" }
+          ]
+        }
+      },
+      "id": "a1000000-0000-0000-0000-000000000001",
+      "name": "Input",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst out = [];\nfor (const item of $input.all()) {\n  const email = String(item.json.email || '').toLowerCase().trim();\n  const breach = String(item.json.breach || '').trim();\n  const fecha = item.json.fecha_breach || 'sin_fecha';\n  const payload = `${email}|${breach}|${fecha}`;\n  const hash = crypto.createHash('sha256').update(payload).digest('hex');\n  out.push({ json: { ...item.json, hash_canonico: hash, payload } });\n}\nreturn out;"
+      },
+      "id": "a1000000-0000-0000-0000-000000000002",
+      "name": "Compute SHA256",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    }
+  ],
+  "connections": {
+    "Input": {
+      "main": [[{ "node": "Compute SHA256", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false,
+  "tags": ["radar", "utils"]
+}

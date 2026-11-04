@@ -1,0 +1,149 @@
+{
+  "name": "W13 - Utils Auditoria",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "modulo"
+            },
+            {
+              "name": "accion"
+            },
+            {
+              "name": "resultado"
+            },
+            {
+              "name": "entidad"
+            },
+            {
+              "name": "entidad_id"
+            },
+            {
+              "name": "usuario_email"
+            },
+            {
+              "name": "detalle"
+            }
+          ]
+        }
+      },
+      "id": "a1300000-0000-0000-0000-000000000001",
+      "name": "Input",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT hash_actual FROM audit_log ORDER BY id DESC LIMIT 1",
+        "options": {}
+      },
+      "id": "a1300000-0000-0000-0000-000000000002",
+      "name": "Get Prev Hash",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        460,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "radar_pg",
+          "name": "Radar PG"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst input = $('Input').first().json;\nconst prevRow = $input.first().json;\nconst prev = prevRow.hash_actual || 'GENESIS';\nconst ts = new Date().toISOString();\nconst usuario_email = input.usuario_email || null;\nconst modulo = input.modulo;\nconst accion = input.accion;\nconst resultado = input.resultado;\nconst payload = `${ts}|${usuario_email || ''}|${modulo}|${accion}|${resultado}|${prev}`;\nconst hash_actual = crypto.createHash('sha256').update(payload).digest('hex');\nreturn [{ json: { ts, tz: 'Europe/Madrid', usuario_email, modulo, accion, resultado, entidad: input.entidad || null, entidad_id: input.entidad_id || null, detalle: input.detalle || null, hash_anterior: prev, hash_actual } }];"
+      },
+      "id": "a1300000-0000-0000-0000-000000000003",
+      "name": "Chain Hash",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO audit_log (ts, tz, usuario_email, modulo, accion, entidad, entidad_id, resultado, detalle, hash_anterior, hash_actual)\nVALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11)\nRETURNING id;",
+        "options": {
+          "queryReplacement": "={{ [$json.ts, $json.tz, $json.usuario_email, $json.modulo, $json.accion, $json.entidad, $json.entidad_id, $json.resultado, JSON.stringify($json.detalle), $json.hash_anterior, $json.hash_actual] }}"
+        }
+      },
+      "id": "a1300000-0000-0000-0000-000000000004",
+      "name": "Insert Audit",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        940,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "radar_pg",
+          "name": "Radar PG"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Input": {
+      "main": [
+        [
+          {
+            "node": "Get Prev Hash",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Prev Hash": {
+      "main": [
+        [
+          {
+            "node": "Chain Hash",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chain Hash": {
+      "main": [
+        [
+          {
+            "node": "Insert Audit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "tags": [
+    {
+      "id": "radar",
+      "name": "radar"
+    },
+    {
+      "id": "utils",
+      "name": "utils"
+    }
+  ],
+  "id": "W13_audit"
+}

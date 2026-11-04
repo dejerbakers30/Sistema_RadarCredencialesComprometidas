@@ -1,0 +1,188 @@
+{
+  "name": "W02 - Correlacion Directorio",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            { "name": "dominio" },
+            { "name": "email" },
+            { "name": "breach" }
+          ]
+        }
+      },
+      "id": "a0200000-0000-0000-0000-000000000001",
+      "name": "Input",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT email, id AS usuario_id FROM usuarios WHERE activo = TRUE",
+        "options": {}
+      },
+      "id": "a0200000-0000-0000-0000-000000000002",
+      "name": "Leer Usuarios Activos",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [460, 220],
+      "credentials": { "postgres": { "id": "radar_pg", "name": "Radar PG" } }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://haveibeenpwned.com/api/v3/breaches",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "user-agent", "value": "RadarCreds/1.0" }
+          ]
+        },
+        "options": { "response": { "response": { "neverError": true, "fullResponse": true } } }
+      },
+      "id": "a0200000-0000-0000-0000-000000000003",
+      "name": "HIBP Breaches Catalog",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 420],
+      "credentials": { "httpHeaderAuth": { "id": "radar_http_hibp", "name": "HIBP API" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const users = $('Leer Usuarios Activos').all().map(i => i.json);\nconst input = $('Input').all().map(i => i.json);\nconst catRaw = $('HIBP Breaches Catalog').first().json;\nconst cat = (typeof catRaw.body === 'string' ? JSON.parse(catRaw.body) : catRaw.body) || [];\nconst catalog = {};\nfor (const b of cat) { catalog[b.Name] = b; }\nconst userMap = new Map(users.map(u => [String(u.email).toLowerCase(), u.usuario_id]));\nconst out = [];\nfor (const row of input) {\n  const emailL = String(row.email || '').toLowerCase();\n  const uid = userMap.get(emailL);\n  if (!uid) continue;\n  const meta = catalog[row.breach] || {};\n  const dataClasses = meta.DataClasses || [];\n  let severidad = 'baja';\n  if (dataClasses.some(d => /password/i.test(d))) severidad = 'critica';\n  else if (dataClasses.some(d => /credit|bank|token/i.test(d))) severidad = 'alta';\n  else if (dataClasses.some(d => /email|username|phone/i.test(d))) severidad = 'media';\n  out.push({ json: {\n    email_corporativo: emailL,\n    usuario_id: uid,\n    breach_origen: row.breach,\n    breach_dominio: meta.Domain || null,\n    fecha_breach: meta.BreachDate || null,\n    severidad,\n    datos_expuestos: dataClasses,\n    fuente_detalle: 'HIBP/' + row.breach\n  }});\n}\nreturn out;"
+      },
+      "id": "a0200000-0000-0000-0000-000000000004",
+      "name": "Merge & Enrich",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "workflowId": "W14_HASH",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "email": "={{ $json.email_corporativo }}",
+            "breach": "={{ $json.breach_origen }}",
+            "fecha_breach": "={{ $json.fecha_breach }}"
+          }
+        },
+        "options": { "waitForSubWorkflow": true }
+      },
+      "id": "a0200000-0000-0000-0000-000000000005",
+      "name": "Hash Canonico",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [940, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO leak_hits (email_corporativo, usuario_id, breach_origen, breach_dominio, fecha_breach, fecha_deteccion, severidad, fuente_id, fuente_detalle, datos_expuestos, estado, hash_canonico)\nSELECT $1::citext, $2::uuid, $3, $4, $5::date, now(), $6::leak_severidad, f.id, $7, $8::text[], 'nuevo', $9\nFROM fuentes f WHERE f.nombre = 'hibp'\nON CONFLICT (hash_canonico) DO NOTHING\nRETURNING id, email_corporativo, breach_origen;",
+        "options": {
+          "queryReplacement": "={{ [ $json.email_corporativo, $json.usuario_id, $json.breach_origen, $json.breach_dominio, $json.fecha_breach, $json.severidad, $json.fuente_detalle, $json.datos_expuestos, $json.hash_canonico ] }}"
+        }
+      },
+      "id": "a0200000-0000-0000-0000-000000000006",
+      "name": "Insert Leak Hit",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1180, 300],
+      "credentials": { "postgres": { "id": "radar_pg", "name": "Radar PG" } },
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": { "type": "string", "operation": "notEmpty" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "a0200000-0000-0000-0000-000000000007",
+      "name": "IF Nuevo Hit",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1420, 300]
+    },
+    {
+      "parameters": {
+        "workflowId": "W03_CONTENCION",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "leak_hit_id": "={{ $json.id }}",
+            "email": "={{ $json.email_corporativo }}",
+            "breach": "={{ $json.breach_origen }}"
+          }
+        },
+        "options": { "waitForSubWorkflow": false }
+      },
+      "id": "a0200000-0000-0000-0000-000000000008",
+      "name": "Trigger W03",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [1660, 220]
+    },
+    {
+      "parameters": {
+        "workflowId": "W13_AUDITORIA",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "modulo": "leaks",
+            "accion": "correlate",
+            "resultado": "ok",
+            "entidad": "leak_hits",
+            "entidad_id": "={{ $json.id }}",
+            "usuario_email": null,
+            "detalle": "={{ JSON.stringify({ breach: $json.breach_origen }) }}"
+          }
+        }
+      },
+      "id": "a0200000-0000-0000-0000-000000000009",
+      "name": "Audit Correlate",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [1660, 380]
+    }
+  ],
+  "connections": {
+    "Input": {
+      "main": [[
+        { "node": "Leer Usuarios Activos", "type": "main", "index": 0 },
+        { "node": "HIBP Breaches Catalog", "type": "main", "index": 0 }
+      ]]
+    },
+    "Leer Usuarios Activos": { "main": [[{ "node": "Merge & Enrich", "type": "main", "index": 0 }]] },
+    "HIBP Breaches Catalog": { "main": [[{ "node": "Merge & Enrich", "type": "main", "index": 0 }]] },
+    "Merge & Enrich": { "main": [[{ "node": "Hash Canonico", "type": "main", "index": 0 }]] },
+    "Hash Canonico": { "main": [[{ "node": "Insert Leak Hit", "type": "main", "index": 0 }]] },
+    "Insert Leak Hit": { "main": [[{ "node": "IF Nuevo Hit", "type": "main", "index": 0 }]] },
+    "IF Nuevo Hit": {
+      "main": [
+        [{ "node": "Trigger W03", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Trigger W03": { "main": [[{ "node": "Audit Correlate", "type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "W12_ERROR_HANDLER"
+  },
+  "active": false,
+  "tags": ["radar", "correlate"]
+}

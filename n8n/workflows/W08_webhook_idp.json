@@ -1,0 +1,71 @@
+{
+  "name": "W08 - Webhook IdP Callback",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "radar/idp/callback",
+        "responseMode": "responseNode",
+        "options": { "rawBody": true }
+      },
+      "id": "a0800000-0000-0000-0000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 300],
+      "webhookId": "radar-idp-callback"
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst item = $input.first();\nconst secret = $env.IDP_HMAC_SECRET || '';\nconst sig = item.json.headers?.['x-radar-signature'] || '';\nconst raw = item.json.rawBody || JSON.stringify(item.json.body || {});\nconst expected = crypto.createHmac('sha256', secret).update(raw).digest('hex');\nconst ok = crypto.timingSafeEqual(Buffer.from(sig || ''), Buffer.from(expected));\nif (!ok) throw new Error('Firma HMAC inválida');\nconst body = typeof item.json.body === 'string' ? JSON.parse(item.json.body) : item.json.body;\nreturn [{ json: { ok, action: body.action, email: body.email, raw: body } }];"
+      },
+      "id": "a0800000-0000-0000-0000-000000000002",
+      "name": "Verify HMAC",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "workflowId": "W13_AUDITORIA",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "modulo": "webhooks",
+            "accion": "idp_callback",
+            "resultado": "ok",
+            "entidad": "webhooks",
+            "entidad_id": null,
+            "usuario_email": "={{ $json.email }}",
+            "detalle": "={{ JSON.stringify({ action: $json.action }) }}"
+          }
+        }
+      },
+      "id": "a0800000-0000-0000-0000-000000000003",
+      "name": "Audit Callback",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ received: true }) }}",
+        "options": {}
+      },
+      "id": "a0800000-0000-0000-0000-000000000004",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [940, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Verify HMAC", "type": "main", "index": 0 }]] },
+    "Verify HMAC": { "main": [[{ "node": "Audit Callback", "type": "main", "index": 0 }]] },
+    "Audit Callback": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false,
+  "tags": ["radar", "webhook"]
+}

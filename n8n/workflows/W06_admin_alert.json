@@ -1,0 +1,83 @@
+{
+  "name": "W06 - Alerta Admin",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            { "name": "mensaje" },
+            { "name": "severidad" }
+          ]
+        }
+      },
+      "id": "a0600000-0000-0000-0000-000000000001",
+      "name": "Input",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TEAMS_WEBHOOK }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: '🚨 Radar Creds [' + $json.severidad + ']: ' + $json.mensaje }) }}",
+        "options": { "response": { "response": { "neverError": true } } }
+      },
+      "id": "a0600000-0000-0000-0000-000000000002",
+      "name": "Teams Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "fromEmail": "radar-creds@example.com",
+        "toEmail": "={{ $env.ADMIN_EMAIL }}",
+        "subject": "=[Radar Creds] Alerta {{ $json.severidad }}",
+        "emailType": "text",
+        "message": "={{ $json.mensaje }}",
+        "options": {}
+      },
+      "id": "a0600000-0000-0000-0000-000000000003",
+      "name": "Email Admin",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [700, 300],
+      "credentials": { "smtp": { "id": "radar_smtp", "name": "Radar SMTP" } },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "workflowId": "W13_AUDITORIA",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "modulo": "admin",
+            "accion": "alert",
+            "resultado": "ok",
+            "entidad": "alertas",
+            "entidad_id": null,
+            "usuario_email": null,
+            "detalle": "={{ JSON.stringify({ mensaje: $json.mensaje, severidad: $json.severidad }) }}"
+          }
+        }
+      },
+      "id": "a0600000-0000-0000-0000-000000000004",
+      "name": "Audit Alert",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [940, 300]
+    }
+  ],
+  "connections": {
+    "Input": { "main": [[{ "node": "Teams Alert", "type": "main", "index": 0 }]] },
+    "Teams Alert": { "main": [[{ "node": "Email Admin", "type": "main", "index": 0 }]] },
+    "Email Admin": { "main": [[{ "node": "Audit Alert", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false,
+  "tags": ["radar", "notify"]
+}

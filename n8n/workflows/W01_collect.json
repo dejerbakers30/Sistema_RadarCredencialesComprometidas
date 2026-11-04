@@ -1,0 +1,197 @@
+{
+  "name": "W01 - Recoleccion HIBP",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "cronExpression", "expression": "0 3 * * *" }] }
+      },
+      "id": "a0100000-0000-0000-0000-000000000001",
+      "name": "Cron 03:00 UTC",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, dominio FROM dominios_monitoreados WHERE activo = TRUE",
+        "options": {}
+      },
+      "id": "a0100000-0000-0000-0000-000000000002",
+      "name": "Leer Dominios",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [460, 300],
+      "credentials": { "postgres": { "id": "radar_pg", "name": "Radar PG" } }
+    },
+    {
+      "parameters": { "batchSize": 1, "options": {} },
+      "id": "a0100000-0000-0000-0000-000000000003",
+      "name": "Loop Dominios",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT payload, expira_en FROM hibp_cache\nWHERE cache_key = encode(digest($1 || '|breacheddomain', 'sha256'), 'hex')\n  AND expira_en > now()\nLIMIT 1;",
+        "options": { "queryReplacement": "={{ [$json.dominio] }}" }
+      },
+      "id": "a0100000-0000-0000-0000-000000000004",
+      "name": "Check Cache",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [940, 300],
+      "credentials": { "postgres": { "id": "radar_pg", "name": "Radar PG" } },
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.payload }}",
+              "rightValue": "",
+              "operator": { "type": "string", "operation": "notEmpty" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "a0100000-0000-0000-0000-000000000005",
+      "name": "IF Cache Hit",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1180, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://haveibeenpwned.com/api/v3/breacheddomain/{{ $('Loop Dominios').item.json.dominio }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "user-agent", "value": "RadarCreds/1.0" }
+          ]
+        },
+        "options": {
+          "response": { "response": { "neverError": true, "fullResponse": true } },
+          "retry": { "retry": { "enabled": true, "maxRetries": 3, "waitBetweenRetries": 5000 } }
+        }
+      },
+      "id": "a0100000-0000-0000-0000-000000000006",
+      "name": "HIBP BreachedDomain",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1420, 220],
+      "credentials": { "httpHeaderAuth": { "id": "radar_http_hibp", "name": "HIBP API" } },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $input.first().json;\nconst dominio = $('Loop Dominios').item.json.dominio;\nconst status = resp.statusCode;\nif (status === 404) { return []; }\nif (status === 429) {\n  const retry = parseInt(resp.headers?.['retry-after'] || '5', 10);\n  await new Promise(r => setTimeout(r, retry * 1000));\n  throw new Error('HIBP 429, reintentar');\n}\nif (status >= 400) { throw new Error('HIBP error ' + status); }\nconst body = typeof resp.body === 'string' ? JSON.parse(resp.body) : resp.body;\nconst out = [];\nfor (const [email, breaches] of Object.entries(body || {})) {\n  for (const breach of breaches) {\n    out.push({ json: { email, breach, dominio } });\n  }\n}\nreturn out;"
+      },
+      "id": "a0100000-0000-0000-0000-000000000007",
+      "name": "Parse HIBP",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1660, 220]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO hibp_cache (cache_key, payload, expira_en)\nVALUES (encode(digest($1 || '|breacheddomain','sha256'),'hex'), $2::jsonb, now() + interval '24 hours')\nON CONFLICT (cache_key) DO UPDATE SET payload = EXCLUDED.payload, expira_en = EXCLUDED.expira_en, consultado_en = now();",
+        "options": { "queryReplacement": "={{ [ $('Loop Dominios').item.json.dominio, JSON.stringify($json) ] }}" }
+      },
+      "id": "a0100000-0000-0000-0000-000000000008",
+      "name": "Guardar Cache",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1660, 380],
+      "credentials": { "postgres": { "id": "radar_pg", "name": "Radar PG" } }
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "operation": "executeQuery",
+        "query": "SELECT nombre, \"BreachDate\", \"DataClasses\", \"Domain\" FROM (SELECT 1) x WHERE FALSE",
+        "options": {}
+      },
+      "id": "a0100000-0000-0000-0000-000000000009",
+      "name": "Placeholder Catalog",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1900, 300],
+      "credentials": { "postgres": { "id": "radar_pg", "name": "Radar PG" } },
+      "disabled": true,
+      "notes": "El catálogo de breaches se obtiene en W02 vía HIBP /breaches; este nodo queda como referencia."
+    },
+    {
+      "parameters": {
+        "workflowId": "W02_CORRELACION",
+        "options": { "waitForSubWorkflow": false }
+      },
+      "id": "a0100000-0000-0000-0000-000000000010",
+      "name": "Trigger W02",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [2140, 300]
+    },
+    {
+      "parameters": {
+        "workflowId": "W13_AUDITORIA",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "modulo": "leaks",
+            "accion": "collect",
+            "resultado": "ok",
+            "entidad": "dominios_monitoreados",
+            "entidad_id": "={{ $('Loop Dominios').item.json.id }}",
+            "usuario_email": null,
+            "detalle": "={{ JSON.stringify({ dominio: $('Loop Dominios').item.json.dominio }) }}"
+          }
+        }
+      },
+      "id": "a0100000-0000-0000-0000-000000000011",
+      "name": "Audit Collect",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [2140, 460]
+    }
+  ],
+  "connections": {
+    "Cron 03:00 UTC": { "main": [[{ "node": "Leer Dominios", "type": "main", "index": 0 }]] },
+    "Leer Dominios": { "main": [[{ "node": "Loop Dominios", "type": "main", "index": 0 }]] },
+    "Loop Dominios": { "main": [[{ "node": "Check Cache", "type": "main", "index": 0 }]] },
+    "Check Cache": { "main": [[{ "node": "IF Cache Hit", "type": "main", "index": 0 }]] },
+    "IF Cache Hit": {
+      "main": [
+        [{ "node": "Trigger W02", "type": "main", "index": 0 }],
+        [{ "node": "HIBP BreachedDomain", "type": "main", "index": 0 }]
+      ]
+    },
+    "HIBP BreachedDomain": {
+      "main": [
+        [{ "node": "Parse HIBP", "type": "main", "index": 0 }],
+        [{ "node": "Guardar Cache", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse HIBP": { "main": [[{ "node": "Guardar Cache", "type": "main", "index": 0 }]] },
+    "Guardar Cache": { "main": [[{ "node": "Trigger W02", "type": "main", "index": 0 }]] },
+    "Trigger W02": { "main": [[{ "node": "Audit Collect", "type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "W12_ERROR_HANDLER"
+  },
+  "active": false,
+  "tags": ["radar", "collect"]
+}
