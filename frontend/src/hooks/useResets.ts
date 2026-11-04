@@ -26,9 +26,10 @@ export function useManualReset() {
   return useMutation({
     mutationFn: async (payload: { leak_hit_id: string; motivo?: string }) =>
       (await api.post<Reset>("/resets/manual", payload)).data,
-    onSuccess: () => {
+    onSuccess: (reset) => {
       queryClient.invalidateQueries({ queryKey: ["resets"] });
       queryClient.invalidateQueries({ queryKey: ["leaks"] });
+      queryClient.invalidateQueries({ queryKey: ["leak", reset.leak_hit_id] });
       queryClient.invalidateQueries({ queryKey: ["kpis"] });
     },
   });

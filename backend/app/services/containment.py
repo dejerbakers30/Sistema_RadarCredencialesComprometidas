@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.db.models.leak import LeakEstado, LeakHit
 from app.db.models.reset import Reset, ResetMetodo, ResetResultado
 from app.services.audit import write_audit
-from app.services.idp_client import BaseIdP
+from app.services.idp_client import BaseIdP, IdPResult
 
 logger = logging.getLogger(__name__)
 
@@ -56,8 +56,16 @@ async def contain_leak(
     db.flush()
 
     email = hit.email_corporativo
-    pwd_res = await idp.reset_password(email)
-    sess_res = await idp.revoke_sessions(email)
+    try:
+        pwd_res = await idp.reset_password(email)
+    except Exception as exc:
+        logger.exception("Fallo IdP al restablecer contraseña para leak %s", leak_hit_id)
+        pwd_res = IdPResult(False, error=str(exc))
+    try:
+        sess_res = await idp.revoke_sessions(email)
+    except Exception as exc:
+        logger.exception("Fallo IdP al revocar sesiones para leak %s", leak_hit_id)
+        sess_res = IdPResult(False, error=str(exc))
 
     ok = pwd_res.ok and sess_res.ok
     reset.idp_respuesta = {
@@ -88,4 +96,6 @@ async def contain_leak(
         detalle={"reset_id": str(reset.id), "resultado": reset.resultado.value},
     )
     db.flush()
+    db.commit()
+    logger.info("Contención leak=%s reset=%s resultado=%s", leak_hit_id, reset.id, reset.resultado.value)
     return reset

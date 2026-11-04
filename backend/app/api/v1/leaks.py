@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -51,6 +51,18 @@ def kpis(
         "total": total, "nuevos": nuevos, "contenidos": contenidos,
         "mttc_min": float(mttc) if mttc else None,
     }
+
+
+@router.get("/{leak_id}", response_model=LeakHitRead)
+def get_leak(
+    leak_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[Usuario, Depends(require_permission("leaks", "read"))],
+):
+    hit = db.get(LeakHit, leak_id)
+    if not hit:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Filtración no encontrada")
+    return hit
 
 
 @router.patch("/{leak_id}", response_model=LeakHitRead)

@@ -1,5 +1,7 @@
 import { useParams } from "react-router-dom";
 import { useLeak, useUpdateLeak } from "@/hooks/useLeaks";
+import { useManualReset } from "@/hooks/useResets";
+import { extractErrorMessage } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SeverityBadge } from "@/components/common/SeverityBadge";
 import { StatusBadge } from "@/components/common/StatusBadge";
@@ -11,6 +13,7 @@ export default function LeakDetail() {
   const { id = "" } = useParams();
   const { data, isLoading } = useLeak(id);
   const update = useUpdateLeak();
+  const manualReset = useManualReset();
   const canWrite = useCan("write", "leaks");
   const canExecute = useCan("execute", "resets");
 
@@ -52,12 +55,19 @@ export default function LeakDetail() {
         )}
         {canExecute && data.estado !== "contenido" && (
           <Button
-            onClick={() => update.mutate({ id: data.id, data: { estado: "contenido" } })}
+            onClick={() => manualReset.mutate({ leak_hit_id: data.id })}
+            disabled={manualReset.isPending}
           >
-            Forzar contención manual
+            {manualReset.isPending ? "Ejecutando contención…" : "Forzar contención manual"}
           </Button>
         )}
       </div>
+      {manualReset.isError && (
+        <p role="alert" className="text-destructive text-sm">{extractErrorMessage(manualReset.error)}</p>
+      )}
+      {manualReset.data && (
+        <p role="status" className="text-sm">Contención registrada: {manualReset.data.resultado}</p>
+      )}
     </div>
   );
 }

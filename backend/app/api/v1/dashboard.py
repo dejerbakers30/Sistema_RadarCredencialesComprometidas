@@ -20,11 +20,12 @@ def summary(
     dias: int = 30,
 ):
     desde = datetime.now(timezone.utc) - timedelta(days=dias)
+    dia_deteccion = func.date_trunc("day", LeakHit.fecha_deteccion)
     por_dia = db.execute(
-        select(func.date_trunc("day", LeakHit.fecha_deteccion), func.count(LeakHit.id))
+        select(dia_deteccion, func.count(LeakHit.id))
         .where(LeakHit.fecha_deteccion >= desde)
-        .group_by(func.date_trunc("day", LeakHit.fecha_deteccion))
-        .order_by(func.date_trunc("day", LeakHit.fecha_deteccion))
+        .group_by(dia_deteccion)
+        .order_by(dia_deteccion)
     ).all()
     por_sev = db.execute(
         select(LeakHit.severidad, func.count(LeakHit.id)).group_by(LeakHit.severidad)
