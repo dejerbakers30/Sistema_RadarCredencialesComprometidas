@@ -38,6 +38,8 @@ backend/.venv/bin/python experiments/scripts/06_audit_integrity.py
 backend/.venv/bin/python experiments/scripts/07_severity_experiment.py
 N8N_TRIALS=30 N8N_DOMAIN_PREFIX=e2e-trial N8N_BREACH_PREFIX=E2ETrial \
   backend/.venv/bin/python experiments/scripts/08_n8n_e2e_experiment.py
+N8N_EXPECT_DUPLICATE_REPLAY=1 N8N_TRIALS=5 N8N_DOMAIN_PREFIX=e2e-trial N8N_BREACH_PREFIX=E2ETrial \
+  N8N_OUTPUT_STEM=n8n_duplicates backend/.venv/bin/python experiments/scripts/08_n8n_e2e_experiment.py
 backend/.venv/bin/python experiments/scripts/generate_tables.py
 backend/.venv/bin/python experiments/scripts/generate_figures.py
 backend/.venv/bin/python experiments/scripts/validate_results.py

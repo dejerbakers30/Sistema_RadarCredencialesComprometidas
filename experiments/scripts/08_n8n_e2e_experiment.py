@@ -29,6 +29,7 @@ COOKIE_FILE = Path(os.getenv("N8N_COOKIE_FILE", "/tmp/radar-n8n-session"))
 W01_ID = "mjKC1mdXkqpvUnQ1"
 W02_ID = "KNawHhHdcsz9LM0m"
 HIBP_FIXTURE_BASE = os.getenv("HIBP_FIXTURE_BASE", "http://host.docker.internal:9000/hibp")
+DUPLICATE_REPLAY = os.getenv("N8N_EXPECT_DUPLICATE_REPLAY", "0").lower() in {"1", "true", "yes"}
 
 
 def cookie_header() -> str:
@@ -206,16 +207,19 @@ return out;"""
         )
 
 
-def mailpit_has(email: str) -> bool:
+def mailpit_count(email: str) -> int:
     request = urllib.request.Request("http://127.0.0.1:8025/api/v1/messages", headers={"Accept": "application/json"})
     try:
         with urllib.request.urlopen(request, timeout=10) as response:
             data = json.loads(response.read().decode())
     except Exception:
-        return False
+        return 0
     messages = data.get("messages", []) if isinstance(data, dict) else []
-    text = json.dumps(messages, ensure_ascii=False).lower()
-    return email.lower() in text
+    return sum(email.lower() in json.dumps(message, ensure_ascii=False).lower() for message in messages)
+
+
+def mailpit_has(email: str) -> bool:
+    return mailpit_count(email) > 0
 
 
 def service_token() -> str:
@@ -272,10 +276,19 @@ def configure_trial(db, domain_model, user_model, role_model, index: int):
     return domain, email, f"{breach_prefix}{index:03d}"
 
 
-def trial_row(db, select, leak_model, reset_model, notification_model, email: str, breach: str, start: datetime, end: datetime, root_id: str, root_status: str, evidence: dict[str, list[dict]], verify: bool, mailpit: bool, error: str = "") -> dict:
+def count_rows(db, select, model, *conditions) -> int:
+    return len(db.execute(select(model).where(*conditions)).scalars().all())
+
+
+def trial_row(db, select, leak_model, reset_model, notification_model, email: str, breach: str, start: datetime, end: datetime, root_id: str, root_status: str, evidence: dict[str, list[dict]], verify: bool, mailpit_before: int, mailpit_after: int, before_counts: dict[str, int], duplicate_replay: bool, error: str = "") -> dict:
     hit = db.execute(select(leak_model).where(leak_model.email_corporativo == email, leak_model.breach_origen == breach)).scalar_one_or_none()
     reset = db.execute(select(reset_model).where(reset_model.leak_hit_id == hit.id)).scalars().first() if hit else None
     notification = db.execute(select(notification_model).where(notification_model.destinatario == email, notification_model.leak_hit_id == (hit.id if hit else None))).scalars().first()
+    after_counts = {
+        "leak_hits": count_rows(db, select, leak_model, leak_model.email_corporativo == email, leak_model.breach_origen == breach),
+        "resets": count_rows(db, select, reset_model, reset_model.leak_hit_id == hit.id) if hit else 0,
+        "notifications": count_rows(db, select, notification_model, notification_model.leak_hit_id == hit.id) if hit else 0,
+    }
     by_name = {name: sorted(values, key=lambda x: x.get("id", ""))[-1] for name, values in evidence.items() if values}
     def ids(name: str) -> list[str]: return [str(x.get("id")) for x in evidence.get(name, []) if x.get("id")]
     def duration(name: str):
@@ -283,14 +296,28 @@ def trial_row(db, select, leak_model, reset_model, notification_model, email: st
         if not values: return "NA"
         item = values[-1]; a, b = dt(item.get("startedAt")), dt(item.get("stoppedAt"))
         return round((b - a).total_seconds() * 1000, 3) if a and b else "NA"
-    successful = bool(hit and reset and reset.resultado.value == "exitoso" and notification and verify and mailpit and root_status == "success" and all(by_name.get(n) for n in ("W02 - Correlacion Directorio", "W03 - Contencion Automatica", "W14 - Utils Hash Canonico", "W15 - Utils Notificacion")) and ids("W13 - Utils Auditoria"))
+    required = all(by_name.get(n) for n in ("W02 - Correlacion Directorio", "W03 - Contencion Automatica", "W14 - Utils Hash Canonico")) and ids("W13 - Utils Auditoria")
+    if duplicate_replay:
+        successful = bool(hit and verify and root_status == "success" and required
+                          and not evidence.get("W15 - Utils Notificacion")
+                          and all(after_counts[key] == before_counts.get(key, -1) for key in ("leak_hits", "resets", "notifications"))
+                          and mailpit_after == mailpit_before)
+    else:
+        successful = bool(hit and reset and reset.resultado.value == "exitoso" and notification and verify and mailpit_after > 0 and root_status == "success" and required and by_name.get("W15 - Utils Notificacion"))
     return {"trial_id": email.split("@", 1)[0], "email": email, "breach": breach, "start_utc": start.isoformat(), "end_utc": end.isoformat(),
         "total_e2e_ms": round((end - start).total_seconds() * 1000, 3), "collection_ms": duration("W01 - Recoleccion HIBP"), "correlation_ms": duration("W02 - Correlacion Directorio"),
         "containment_ms": duration("W03 - Contencion Automatica"), "notification_ms": duration("W15 - Utils Notificacion"), "audit_ms": duration("W13 - Utils Auditoria"),
         "w01_execution_id": root_id, "w02_execution_id": (by_name.get("W02 - Correlacion Directorio") or {}).get("id", ""), "w03_execution_id": (by_name.get("W03 - Contencion Automatica") or {}).get("id", ""),
         "w14_execution_id": (by_name.get("W14 - Utils Hash Canonico") or {}).get("id", ""), "w15_execution_id": (by_name.get("W15 - Utils Notificacion") or {}).get("id", ""),
         "w13_execution_ids": ";".join(ids("W13 - Utils Auditoria")), "leak_hit_id": str(hit.id) if hit else "", "reset_id": str(reset.id) if reset else "", "notification_id": str(notification.id) if notification else "",
-        "audit_ok": verify, "mailpit_received": mailpit, "result": "success" if successful else "fail", "error": error or ("missing evidence or persistence" if not successful else "")}
+        "audit_ok": verify, "mailpit_received": mailpit_after > 0, "mailpit_new": mailpit_after > mailpit_before,
+        "mailpit_messages_before": mailpit_before, "mailpit_messages_after": mailpit_after,
+        "new_leak_hits": after_counts["leak_hits"] - before_counts.get("leak_hits", after_counts["leak_hits"]),
+        "new_resets": after_counts["resets"] - before_counts.get("resets", after_counts["resets"]),
+        "new_notifications": after_counts["notifications"] - before_counts.get("notifications", after_counts["notifications"]),
+        "duplicate_suppressed": duplicate_replay and successful,
+        "result": "success" if successful else "fail",
+        "error": error or (("duplicate suppression evidence missing" if duplicate_replay else "missing evidence or persistence") if not successful else "")}
 
 
 def main() -> int:
@@ -302,6 +329,13 @@ def main() -> int:
     try:
         for index in range(1, int(os.getenv("N8N_TRIALS", "30")) + 1):
             domain, email, breach = configure_trial(db, DominioMonitoreado, Usuario, Role, index)
+            before_counts = {
+                "leak_hits": count_rows(db, select, LeakHit, LeakHit.email_corporativo == email, LeakHit.breach_origen == breach),
+            }
+            existing_hit = db.execute(select(LeakHit).where(LeakHit.email_corporativo == email, LeakHit.breach_origen == breach)).scalar_one_or_none()
+            before_counts["resets"] = count_rows(db, select, Reset, Reset.leak_hit_id == existing_hit.id) if existing_hit else 0
+            before_counts["notifications"] = count_rows(db, select, Notificacion, Notificacion.leak_hit_id == existing_hit.id) if existing_hit else 0
+            mailpit_before = mailpit_count(email)
             try:
                 root_id, start, end, status = run_w01(workflow)
                 # Execute Workflow nodes finish asynchronously after the root
@@ -313,7 +347,8 @@ def main() -> int:
                 end = evidence_end
                 verify_request = urllib.request.Request("http://127.0.0.1:8000/api/v1/audit/verify", headers={"Authorization": "Bearer " + service_token()})
                 with urllib.request.urlopen(verify_request, timeout=15) as response: verify = json.loads(response.read().decode()).get("ok") is True
-                row = trial_row(db, select, LeakHit, Reset, Notificacion, email, breach, start, end, root_id, status, evidence, verify, mailpit_has(email))
+                mailpit_after = mailpit_count(email)
+                row = trial_row(db, select, LeakHit, Reset, Notificacion, email, breach, start, end, root_id, status, evidence, verify, mailpit_before, mailpit_after, before_counts, DUPLICATE_REPLAY)
             except Exception as exc:
                 now = datetime.now(UTC); row = {"trial_id": email.split("@", 1)[0], "email": email, "breach": breach, "start_utc": now.isoformat(), "end_utc": now.isoformat(), "total_e2e_ms": "", "result": "fail", "error": type(exc).__name__ + ": " + str(exc)}
             rows.append(row); db.commit()

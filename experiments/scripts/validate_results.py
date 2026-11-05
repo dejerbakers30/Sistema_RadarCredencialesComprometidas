@@ -33,6 +33,7 @@ def main() -> int:
     ) and bool(provenance.get("sources"))
     n8n_rows = list(csv.DictReader((RESULTS / "n8n_e2e_latency.csv").open(encoding="utf-8"))) if (RESULTS / "n8n_e2e_latency.csv").exists() else []
     preflight_rows = list(csv.DictReader((RESULTS / "n8n_preflights.csv").open(encoding="utf-8"))) if (RESULTS / "n8n_preflights.csv").exists() else []
+    duplicate_rows = list(csv.DictReader((RESULTS / "n8n_duplicates_latency.csv").open(encoding="utf-8"))) if (RESULTS / "n8n_duplicates_latency.csv").exists() else []
     n8n_summary = read_json(RESULTS / "n8n_e2e_summary.json") if (RESULTS / "n8n_e2e_summary.json").exists() else {}
     duplicate_control = read_json(RESULTS / "n8n_duplicate_control.json") if (RESULTS / "n8n_duplicate_control.json").exists() else {}
     checks["n8n_trials"] = len(n8n_rows) == 30 and all(r.get("result") == "success" for r in n8n_rows)
@@ -40,8 +41,17 @@ def main() -> int:
     checks["n8n_notification_latency"] = all(r.get("notification_ms") not in ("", "NA", "0", "0.0", None) for r in n8n_rows)
     checks["n8n_summary"] = n8n_summary.get("n_total") == 30 and n8n_summary.get("n_success") == 30 and n8n_summary.get("n_fail") == 0
     checks["preflights"] = len(preflight_rows) == 3 and all(r.get("result") == "success" for r in preflight_rows)
+    checks["duplicate_trials"] = len(duplicate_rows) == 5 and all(
+        r.get("result") == "success"
+        and r.get("duplicate_suppressed") == "True"
+        and r.get("new_leak_hits") == "0"
+        and r.get("new_resets") == "0"
+        and r.get("new_notifications") == "0"
+        and r.get("mailpit_new") == "False"
+        for r in duplicate_rows
+    )
     checks["duplicate_control"] = duplicate_control.get("replays") == 5 and duplicate_control.get("new_leak_hits") == 0 and duplicate_control.get("duplicate_suppression_rate") == 1.0
-    checks["ok"] = checks["ok"] and checks["provenance_hashes_match"] and all(checks[k] for k in ("n8n_trials", "n8n_execution_ids", "n8n_notification_latency", "n8n_summary", "preflights", "duplicate_control"))
+    checks["ok"] = checks["ok"] and checks["provenance_hashes_match"] and all(checks[k] for k in ("n8n_trials", "n8n_execution_ids", "n8n_notification_latency", "n8n_summary", "preflights", "duplicate_trials", "duplicate_control"))
     print(json.dumps(checks, ensure_ascii=False))
     return 0 if checks["ok"] else 2
 

@@ -4,7 +4,10 @@
   "hits_before": 30,
   "hits_after": 30,
   "new_leak_hits": 0,
+  "new_resets": 0,
+  "new_notifications": 0,
+  "new_mailpit_messages": 0,
   "duplicate_suppression_rate": 1.0,
   "fixture_only": true,
-  "evidence_source": "n8n_duplicates_latency.csv plus PostgreSQL aggregate verification"
+  "evidence_source": "n8n_duplicates_latency.csv plus PostgreSQL and Mailpit aggregate verification"
 }
