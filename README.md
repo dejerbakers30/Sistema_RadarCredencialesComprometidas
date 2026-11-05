@@ -26,7 +26,7 @@ Ejecuta los siguientes pasos desde la raíz del proyecto, utilizando una termina
 
 ### Terminal 1: Docker
 
-La base de datos utiliza el contenedor existente `radar-credenciales-postgres`, publicado en el puerto `5433`. Asegúrate de que esté iniciado en Docker Desktop antes de levantar n8n. El Compose de n8n no inicia PostgreSQL.
+La base de datos local del proyecto se publica en el puerto `55433` para evitar conflictos con otros servicios PostgreSQL. Asegúrate de que esté iniciado en Docker antes de levantar n8n. El Compose de n8n no inicia PostgreSQL.
 
 ```powershell
 docker compose -f n8n/docker-compose.n8n.yml up -d
@@ -61,12 +61,14 @@ npm run dev
 | Estado del backend | http://127.0.0.1:8000/health |
 | n8n | http://localhost:5678 |
 
-## Credenciales de acceso: administrador
+## Configuración del administrador inicial
 
-Credenciales del administrador inicial de la aplicación:
+Crear el administrador mediante el comando seguro de [`AGENTS.md`](AGENTS.md), usando valores definidos fuera del repositorio:
 
-- **Email:** `admin@example.com`
-- **Contraseña:** `AdminClave!2025`
+- **Email de ejemplo:** `admin@example.com`
+- **Contraseña:** `<CONFIGURAR_PASSWORD_ADMIN>`
+
+La contraseña histórica que aparecía en versiones anteriores de esta documentación debe rotarse manualmente si fue utilizada. Este cambio no modifica el historial Git.
 
 La cuenta Owner de n8n se configura por separado en su interfaz.
 

@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, SmallInteger, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, SmallInteger, String, Text
 from sqlalchemy.dialects.postgresql import CITEXT
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -49,6 +49,9 @@ class Usuario(Base, UUIDPKMixin, TimestampMixin):
     password_hash: Mapped[str | None] = mapped_column(String(255))  # solo si auth local
     mfa_secret: Mapped[str | None] = mapped_column(String(255))
     mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    mfa_challenge_hash: Mapped[str | None] = mapped_column(String(64))
+    mfa_challenge_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    token_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     ultimo_login: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     rol: Mapped[Role] = relationship(back_populates="usuarios")

@@ -6,6 +6,7 @@ export interface User {
   id: string;
   email: string;
   nombre: string;
+  rol: string;
   activo: boolean;
   mfa_enabled: boolean;
 }

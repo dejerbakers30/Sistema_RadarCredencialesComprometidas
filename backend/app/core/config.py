@@ -26,7 +26,9 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     MFA_REQUIRED_ROLES: list[str] = ["admin", "soc_analyst"]
+    MFA_CHALLENGE_EXPIRE_MINUTES: int = 5
     PASSWORD_MIN_LENGTH: int = 12
+    N8N_SERVICE_TOKEN: SecretStr | None = None
     CORS_ORIGINS: list[str] = ["http://localhost:5173"]
 
     # --- Base de datos ---
@@ -37,6 +39,7 @@ class Settings(BaseSettings):
 
     # --- Redis ---
     REDIS_URL: RedisDsn = "redis://localhost:6379/0"
+    REDIS_REQUIRED: bool = True
     HIBP_CACHE_TTL_HOURS: int = 24
     RATE_LIMIT_PER_MINUTE: int = 60
 
@@ -79,6 +82,7 @@ class Settings(BaseSettings):
     # --- Auditoría ---
     AUDIT_RETENTION_DAYS: int = 365
     AUDIT_VERIFY_INTERVAL_HOURS: int = 6
+    BACKEND_SCHEDULER_COLLECT_ENABLED: bool = False
 
     # --- Reportes ---
     REPORTS_STORAGE_PATH: str = "/var/lib/radar_creds/reports"

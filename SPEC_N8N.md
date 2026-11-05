@@ -386,22 +386,6 @@ json
     },
     {
       "parameters": {
-        "source": "database",
-        "operation": "executeQuery",
-        "query": "SELECT nombre, \"BreachDate\", \"DataClasses\", \"Domain\" FROM (SELECT 1) x WHERE FALSE",
-        "options": {}
-      },
-      "id": "a0100000-0000-0000-0000-000000000009",
-      "name": "Placeholder Catalog",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.5,
-      "position": [1900, 300],
-      "credentials": { "postgres": { "id": "radar_pg", "name": "Radar PG" } },
-      "disabled": true,
-      "notes": "El catálogo de breaches se obtiene en W02 vía HIBP /breaches; este nodo queda como referencia."
-    },
-    {
-      "parameters": {
         "workflowId": "W02_CORRELACION",
         "options": { "waitForSubWorkflow": false }
       },

@@ -1,0 +1,23 @@
+{
+  "http_status": 200,
+  "response_headers": {
+    "Access-Control-Allow-Origin": "*",
+    "CF-RAY": "a55d2260885193b3-SCL",
+    "Cache-Control": "public, max-age=300",
+    "Cf-Placement": "remote-SJC",
+    "Connection": "close",
+    "Content-Length": "1130025",
+    "Content-Type": "application/json",
+    "Date": "Thu, 05 Nov 2026 16:11:26 GMT",
+    "Permissions-Policy": "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=(), interest-cohort=()",
+    "Server": "cloudflare",
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
+    "Vary": "accept-encoding",
+    "X-Content-Type-Options": "nosniff",
+    "alt-svc": "h3=\":443\"; ma=86400",
+    "set-cookie": "__cf_bm=slAFvHiQ1OcpBMySB6lktnW_SEa6IVkfFk_KLWmk798-1793895086.1651456-1.0.1.1-Yi9B3hvxWVMraUmjX0vuNuVkBVHvKlDhDfP.B4w9jcdxCgiYSasnYKl3kmFP80t7I4OBjWlMgh8CwL5IQbhJdLr7SGbSyIbW30jJJm7xiI14YkiFGkyU8u5eHcmkZ2x8; HttpOnly; SameSite=None; Secure; Path=/; Domain=haveibeenpwned.com; Expires=Thu, 05 Nov 2026 16:41:26 GMT"
+  },
+  "retrieved_at": "2026-11-05T16:11:17.724976Z",
+  "url": "https://haveibeenpwned.com/api/v3/breaches",
+  "user_agent": "RadarCreds-UNT-Research/1.0"
+}

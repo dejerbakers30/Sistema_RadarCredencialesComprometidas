@@ -1,36 +1,50 @@
 import os
-from typing import Generator
+from collections.abc import Generator
+from pathlib import Path
 
 import pytest
+from alembic.config import Config
+
+from alembic import command
+
+os.environ.setdefault(
+    "DATABASE_URL",
+    os.getenv("TEST_DATABASE_URL", "postgresql+psycopg://radar:test@localhost:5433/radar_test"),
+)
+os.environ.setdefault("JWT_SECRET", "test-only-secret-with-at-least-32-characters")
+os.environ.setdefault("HIBP_API_KEY", "test-only-hibp-key")
+os.environ.setdefault("REDIS_REQUIRED", "false")
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.core.config import settings
-from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
 
-# BD de test (SQLite en memoria o Postgres de test)
-TEST_DB_URL = os.getenv("TEST_DATABASE_URL", "sqlite:///./test.db")
-engine = create_engine(TEST_DB_URL, connect_args={"check_same_thread": False} if "sqlite" in TEST_DB_URL else {})
+# PostgreSQL de test; no se sustituye por SQLite porque el esquema usa tipos,
+# extensiones y triggers específicos de PostgreSQL.
+TEST_DB_URL = os.getenv("TEST_DATABASE_URL", os.environ["DATABASE_URL"])
+engine = create_engine(TEST_DB_URL)
 TestingSession = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="session")
 def setup_db():
-    Base.metadata.create_all(bind=engine)
+    if not os.getenv("TEST_DATABASE_URL"):
+        pytest.skip("Las pruebas de integración requieren TEST_DATABASE_URL de PostgreSQL")
+    alembic_config = Config(str(Path(__file__).parents[2] / "alembic.ini"))
+    command.upgrade(alembic_config, "head")
     yield
-    Base.metadata.drop_all(bind=engine)
+    command.downgrade(alembic_config, "base")
 
 
 @pytest.fixture
-def db() -> Generator[Session, None, None]:
+def db(setup_db) -> Generator[Session, None, None]:
     s = TestingSession()
     try:
         yield s
-        s.commit()
     finally:
+        s.rollback()
         s.close()
 
 

@@ -1,4 +1,5 @@
-from datetime import datetime, timezone
+import secrets
+from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 import pyotp
@@ -9,9 +10,10 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import client_meta, get_current_user
 from app.core.crypto import encrypt, decrypt
+from app.core.config import settings
 from app.core.security import (
-    create_access_token, create_refresh_token, decode_token,
-    hash_password, verify_mfa, verify_password, generate_mfa_secret,
+    create_access_token, create_refresh_token, decode_token, generate_mfa_secret,
+    hash_challenge, hash_password, is_challenge_valid, verify_mfa, verify_password,
 )
 from app.db.models.user import Role, Usuario
 from app.db.session import get_db
@@ -36,15 +38,21 @@ def login(
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Credenciales inválidas")
 
     if user.mfa_enabled:
+        challenge = secrets.token_urlsafe(32)
+        user.mfa_challenge_hash = hash_challenge(challenge)
+        user.mfa_challenge_expires_at = datetime.now(timezone.utc) + timedelta(
+            minutes=settings.MFA_CHALLENGE_EXPIRE_MINUTES
+        )
         write_audit(db, modulo="auth", accion="login_mfa_pending", resultado="ok",
                     usuario_email=user.email, ip_origen=meta.get("ip"), user_agent=meta.get("user_agent"))
         return TokenResponse(
-            access_token="", refresh_token="", expires_in=0, mfa_required=True
+            access_token="", refresh_token="", expires_in=0, mfa_required=True,
+            mfa_challenge_token=challenge,
         )
 
     user.ultimo_login = datetime.now(timezone.utc)
-    access = create_access_token(str(user.id), user.rol.nombre)
-    refresh = create_refresh_token(str(user.id))
+    access = create_access_token(str(user.id), user.rol.nombre, user.token_version)
+    refresh = create_refresh_token(str(user.id), user.token_version)
     write_audit(db, modulo="auth", accion="login", resultado="ok",
                 usuario_email=user.email, ip_origen=meta.get("ip"), user_agent=meta.get("user_agent"))
     return TokenResponse(
@@ -61,13 +69,22 @@ def mfa_verify(
 ):
     user = db.execute(select(Usuario).where(Usuario.email == payload.email)).scalar_one_or_none()
     meta = client_meta(request)
-    if not user or not user.mfa_secret or not verify_mfa(user.mfa_secret, payload.code):
+    now = datetime.now(timezone.utc)
+    if (
+        not user
+        or not user.mfa_secret
+        or not is_challenge_valid(payload.challenge_token, user.mfa_challenge_hash,
+                                  user.mfa_challenge_expires_at, now)
+        or not verify_mfa(decrypt(user.mfa_secret), payload.code)
+    ):
         write_audit(db, modulo="auth", accion="mfa_verify", resultado="denied",
                     usuario_email=payload.email, ip_origen=meta.get("ip"), user_agent=meta.get("user_agent"))
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Código MFA inválido")
-    user.ultimo_login = datetime.now(timezone.utc)
-    access = create_access_token(str(user.id), user.rol.nombre)
-    refresh = create_refresh_token(str(user.id))
+    user.ultimo_login = now
+    user.mfa_challenge_hash = None
+    user.mfa_challenge_expires_at = None
+    access = create_access_token(str(user.id), user.rol.nombre, user.token_version)
+    refresh = create_refresh_token(str(user.id), user.token_version)
     write_audit(db, modulo="auth", accion="mfa_verify", resultado="ok",
                 usuario_email=user.email, ip_origen=meta.get("ip"), user_agent=meta.get("user_agent"))
     return TokenResponse(access_token=access, refresh_token=refresh, expires_in=30 * 60)
@@ -82,11 +99,24 @@ def refresh_token(payload: RefreshRequest, db: Annotated[Session, Depends(get_db
     if data.get("type") != "refresh":
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Tipo incorrecto")
     user = db.get(Usuario, data["sub"])
-    if not user or not user.activo:
+    if not user or not user.activo or data.get("token_version", 0) != user.token_version:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Usuario inválido")
-    access = create_access_token(str(user.id), user.rol.nombre)
-    new_refresh = create_refresh_token(str(user.id))
+    access = create_access_token(str(user.id), user.rol.nombre, user.token_version)
+    new_refresh = create_refresh_token(str(user.id), user.token_version)
     return TokenResponse(access_token=access, refresh_token=new_refresh, expires_in=30 * 60)
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(
+    user: Annotated[Usuario, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    """Revoca todos los tokens emitidos antes de esta operación para el usuario."""
+    user.token_version += 1
+    user.mfa_challenge_hash = None
+    user.mfa_challenge_expires_at = None
+    write_audit(db, modulo="auth", accion="logout", resultado="ok",
+                usuario_id=user.id, usuario_email=user.email)
 
 
 @router.get("/me")

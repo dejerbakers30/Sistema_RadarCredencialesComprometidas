@@ -2,17 +2,20 @@ import logging
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_client import Counter, Histogram, make_asgi_app
+from redis import Redis
+from sqlalchemy import text
 
 from app.api.v1 import (
-    auth, audit, dashboard, leaks, reports, resets, sources, users, webhooks,
+    auth, audit, dashboard, leaks, notifications, reports, resets, roles, sources, users, webhooks,
 )
 from app.core.config import settings
 from app.core.logging import configure_logging
 from app.services.scheduler import start_scheduler, stop_scheduler
+from app.db.session import engine
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -40,7 +43,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -75,8 +78,25 @@ def health():
 
 @app.get("/ready", tags=["health"])
 def ready():
-    # Verificación ligera; en prod consultar DB y Redis
-    return {"status": "ready"}
+    dependencies = {"postgres": "unavailable", "redis": "skipped"}
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+        dependencies["postgres"] = "ok"
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                            detail={"status": "not_ready", "dependencies": dependencies})
+    if settings.REDIS_REQUIRED:
+        try:
+            client = Redis.from_url(str(settings.REDIS_URL), socket_connect_timeout=1,
+                                    socket_timeout=1)
+            client.ping()
+            client.close()
+            dependencies["redis"] = "ok"
+        except Exception:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                                detail={"status": "not_ready", "dependencies": dependencies})
+    return {"status": "ready", "dependencies": dependencies}
 
 
 if settings.METRICS_ENABLED:
@@ -84,6 +104,8 @@ if settings.METRICS_ENABLED:
 
 API = settings.API_V1_PREFIX
 app.include_router(auth.router, prefix=API)
+app.include_router(notifications.router, prefix=API)
+app.include_router(roles.router, prefix=API)
 app.include_router(users.router, prefix=API)
 app.include_router(leaks.router, prefix=API)
 app.include_router(resets.router, prefix=API)

@@ -1,23 +1,55 @@
 services:
-  n8n:
-    image: n8nio/n8n:latest
-    container_name: radar-n8n
+  mailpit:
+    image: axllent/mailpit:v1.21
+    container_name: radar-mailpit
     restart: unless-stopped
     ports:
+      - "1025:1025"
+      - "8025:8025"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8025/api/v1/info"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  n8n:
+    image: n8nio/n8n:2.46.6
+    container_name: radar-n8n
+    restart: unless-stopped
+
+    ports:
       - "5678:5678"
+
     env_file:
       - .env
+
     environment:
-      - N8N_HOST=localhost
-      - N8N_PORT=5678
-      - N8N_PROTOCOL=http
-      - WEBHOOK_URL=http://localhost:5678/
-      - GENERIC_TIMEZONE=Europe/Madrid
+      N8N_HOST: ${N8N_HOST}
+      N8N_PORT: ${N8N_PORT}
+      N8N_PROTOCOL: ${N8N_PROTOCOL}
+      N8N_WEBHOOK_URL: ${N8N_WEBHOOK_URL}
+      GENERIC_TIMEZONE: ${GENERIC_TIMEZONE}
+      NODE_FUNCTION_ALLOW_BUILTIN: crypto
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+
+      RADAR_API_BASE: ${RADAR_API_BASE}
+      RADAR_SERVICE_TOKEN: ${RADAR_SERVICE_TOKEN}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+
+      IDP_WEBHOOK_URL: ${IDP_WEBHOOK_URL}
+      IDP_HMAC_SECRET: ${IDP_HMAC_SECRET}
+      IDP_BEARER_TOKEN: ${IDP_BEARER_TOKEN}
+      IDP_USERS_ENDPOINT: ${IDP_USERS_ENDPOINT}
+
+      TEAMS_WEBHOOK: ${TEAMS_WEBHOOK}
+
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
     volumes:
       - n8n_data:/home/node/.n8n
       - ./workflows:/data/workflows:ro
+
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:5678/healthz || exit 1"]
       interval: 30s
