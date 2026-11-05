@@ -2,6 +2,28 @@
   "name": "W02 - Correlacion Directorio",
   "nodes": [
     {
+      "parameters": { "mode": "append", "numberInputs": 3 },
+      "id": "a0200000-0000-0000-0000-00000000000a",
+      "name": "Sync Correlation Inputs",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [700, 460]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, email_corporativo, breach_origen FROM leak_hits WHERE hash_canonico = $1 LIMIT 1;",
+        "options": { "queryReplacement": "={{ [ $('Hash Canonico').first().json.hash_canonico ] }}" }
+      },
+      "id": "a0200000-0000-0000-0000-00000000000b",
+      "name": "Read Correlated Leak Hit",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1180, 300],
+      "credentials": { "postgres": { "id": "radar_pg", "name": "Radar PG" } },
+      "alwaysOutputData": true
+    },
+    {
       "parameters": {
         "workflowInputs": {
           "values": [
@@ -53,7 +75,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const users = $('Leer Usuarios Activos').all().map(i => i.json);\nconst input = $('Input').all().map(i => i.json);\nconst catRaw = $('HIBP Breaches Catalog').first().json;\nconst cat = (typeof catRaw.body === 'string' ? JSON.parse(catRaw.body) : catRaw.body) || [];\nconst catalog = {};\nfor (const b of cat) { catalog[b.Name] = b; }\nconst userMap = new Map(users.map(u => [String(u.email).toLowerCase(), u.usuario_id]));\nconst out = [];\nfor (const row of input) {\n  const emailL = String(row.email || '').toLowerCase();\n  const uid = userMap.get(emailL);\n  if (!uid) continue;\n  const meta = catalog[row.breach] || {};\n  const dataClasses = meta.DataClasses || [];\n  let severidad = 'baja';\n  if (dataClasses.some(d => /password/i.test(d))) severidad = 'critica';\n  else if (dataClasses.some(d => /credit|bank|token/i.test(d))) severidad = 'alta';\n  else if (dataClasses.some(d => /email|username|phone/i.test(d))) severidad = 'media';\n  out.push({ json: {\n    email_corporativo: emailL,\n    usuario_id: uid,\n    breach_origen: row.breach,\n    breach_dominio: meta.Domain || null,\n    fecha_breach: meta.BreachDate || null,\n    severidad,\n    datos_expuestos: dataClasses,\n    fuente_detalle: 'HIBP/' + row.breach\n  }});\n}\nreturn out;"
+        "jsCode": "const event = $('Input').first().json;\nconst users = $('Leer Usuarios Activos').all().map(item => item.json);\nconst catalogItems = $('HIBP Breaches Catalog').all();\nconst catalog = catalogItems.flatMap(item => {\n  const value = item.json;\n  if (Array.isArray(value)) return value;\n  if (Array.isArray(value.body)) return value.body;\n  if (typeof value.body === 'string') { try { return JSON.parse(value.body); } catch { return []; } }\n  if (Array.isArray(value.data)) return value.data;\n  return value.Name ? [value] : [];\n});\nconst email = String(event.email || '').trim().toLowerCase();\nconst breach = String(event.breach || '').trim();\nconst user = users.find(item => String(item.email || '').trim().toLowerCase() === email);\nconst metadata = catalog.find(item => String(item.Name || '').trim() === breach);\nif (!user || !metadata) return [];\nconst dataClasses = Array.isArray(metadata.DataClasses) ? metadata.DataClasses : [];\nlet severidad = 'baja';\nif (dataClasses.some(value => /password/i.test(String(value)))) severidad = 'critica';\nelse if (dataClasses.some(value => /credit|bank|token/i.test(String(value)))) severidad = 'alta';\nelse if (dataClasses.some(value => /email|username|phone/i.test(String(value)))) severidad = 'media';\nreturn [{ json: { email_corporativo: email, usuario_id: user.usuario_id ?? user.id, breach_origen: breach, breach_dominio: metadata.Domain || null, fecha_breach: metadata.BreachDate || null, severidad, datos_expuestos: dataClasses, fuente_detalle: 'HIBP/' + breach } }];"
       },
       "id": "a0200000-0000-0000-0000-000000000004",
       "name": "Merge & Enrich",
@@ -63,7 +85,8 @@
     },
     {
       "parameters": {
-        "workflowId": "W14_HASH",
+        "source": "database",
+        "workflowId": { "__rl": true, "value": "W14_HASH", "mode": "list", "cachedResultName": "W14 - Utils Hash Canonico" },
         "workflowInputs": {
           "mappingMode": "defineBelow",
           "value": {
@@ -85,7 +108,7 @@
         "operation": "executeQuery",
         "query": "INSERT INTO leak_hits (email_corporativo, usuario_id, breach_origen, breach_dominio, fecha_breach, fecha_deteccion, severidad, fuente_id, fuente_detalle, datos_expuestos, estado, hash_canonico)\nSELECT $1::citext, $2::uuid, $3, $4, $5::date, now(), $6::leak_severidad, f.id, $7, $8::text[], 'nuevo', $9\nFROM fuentes f WHERE f.nombre = 'hibp'\nON CONFLICT (hash_canonico) DO NOTHING\nRETURNING id, email_corporativo, breach_origen;",
         "options": {
-          "queryReplacement": "={{ [ $json.email_corporativo, $json.usuario_id, $json.breach_origen, $json.breach_dominio, $json.fecha_breach, $json.severidad, $json.fuente_detalle, $json.datos_expuestos, $json.hash_canonico ] }}"
+          "queryReplacement": "={{ [ $('Merge & Enrich').first().json.email_corporativo, $('Merge & Enrich').first().json.usuario_id, $('Merge & Enrich').first().json.breach_origen, $('Merge & Enrich').first().json.breach_dominio, $('Merge & Enrich').first().json.fecha_breach, $('Merge & Enrich').first().json.severidad, $('Merge & Enrich').first().json.fuente_detalle, $('Merge & Enrich').first().json.datos_expuestos, $('Hash Canonico').first().json.hash_canonico ] }}"
         }
       },
       "id": "a0200000-0000-0000-0000-000000000006",
@@ -119,7 +142,8 @@
     },
     {
       "parameters": {
-        "workflowId": "W03_CONTENCION",
+        "source": "database",
+        "workflowId": { "__rl": true, "value": "W03_CONTENCION", "mode": "list", "cachedResultName": "W03 - Contencion Automatica" },
         "workflowInputs": {
           "mappingMode": "defineBelow",
           "value": {
@@ -138,7 +162,8 @@
     },
     {
       "parameters": {
-        "workflowId": "W13_AUDITORIA",
+        "source": "database",
+        "workflowId": { "__rl": true, "value": "W13_AUDITORIA", "mode": "list", "cachedResultName": "W13 - Utils Auditoria" },
         "workflowInputs": {
           "mappingMode": "defineBelow",
           "value": {
@@ -163,14 +188,17 @@
     "Input": {
       "main": [[
         { "node": "Leer Usuarios Activos", "type": "main", "index": 0 },
-        { "node": "HIBP Breaches Catalog", "type": "main", "index": 0 }
+        { "node": "HIBP Breaches Catalog", "type": "main", "index": 0 },
+        { "node": "Sync Correlation Inputs", "type": "main", "index": 2 }
       ]]
     },
-    "Leer Usuarios Activos": { "main": [[{ "node": "Merge & Enrich", "type": "main", "index": 0 }]] },
-    "HIBP Breaches Catalog": { "main": [[{ "node": "Merge & Enrich", "type": "main", "index": 0 }]] },
+    "Leer Usuarios Activos": { "main": [[{ "node": "Sync Correlation Inputs", "type": "main", "index": 0 }]] },
+    "HIBP Breaches Catalog": { "main": [[{ "node": "Sync Correlation Inputs", "type": "main", "index": 1 }]] },
+    "Sync Correlation Inputs": { "main": [[{ "node": "Merge & Enrich", "type": "main", "index": 0 }]] },
     "Merge & Enrich": { "main": [[{ "node": "Hash Canonico", "type": "main", "index": 0 }]] },
     "Hash Canonico": { "main": [[{ "node": "Insert Leak Hit", "type": "main", "index": 0 }]] },
-    "Insert Leak Hit": { "main": [[{ "node": "IF Nuevo Hit", "type": "main", "index": 0 }]] },
+    "Insert Leak Hit": { "main": [[{ "node": "Read Correlated Leak Hit", "type": "main", "index": 0 }]] },
+    "Read Correlated Leak Hit": { "main": [[{ "node": "IF Nuevo Hit", "type": "main", "index": 0 }]] },
     "IF Nuevo Hit": {
       "main": [
         [{ "node": "Trigger W03", "type": "main", "index": 0 }],

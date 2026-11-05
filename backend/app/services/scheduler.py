@@ -53,7 +53,8 @@ async def job_verify_chain() -> None:
 
 
 def start_scheduler() -> None:
-    scheduler.add_job(job_collect, "cron", hour=3, minute=0, id="collect", replace_existing=True)
+    if settings.BACKEND_SCHEDULER_COLLECT_ENABLED:
+        scheduler.add_job(job_collect, "cron", hour=3, minute=0, id="collect", replace_existing=True)
     scheduler.add_job(job_retries, "interval", minutes=15, id="retries", replace_existing=True)
     scheduler.add_job(
         job_verify_chain, "interval",

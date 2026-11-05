@@ -1,0 +1,29 @@
+{
+  "permanent_failure": {
+    "mean_attempts": 1,
+    "mean_latency_ms": 4.4308,
+    "median_latency_ms": 4.3255,
+    "n": 10,
+    "p95_latency_ms": 4.921,
+    "success_rate": 0.0,
+    "successful": 0
+  },
+  "success": {
+    "mean_attempts": 1,
+    "mean_latency_ms": 10.074300000000001,
+    "median_latency_ms": 5.6259999999999994,
+    "n": 10,
+    "p95_latency_ms": 7.605,
+    "success_rate": 1.0,
+    "successful": 10
+  },
+  "temporary_then_success": {
+    "mean_attempts": 2,
+    "mean_latency_ms": 7.711399999999999,
+    "median_latency_ms": 7.7065,
+    "n": 10,
+    "p95_latency_ms": 8.269,
+    "success_rate": 1.0,
+    "successful": 10
+  }
+}

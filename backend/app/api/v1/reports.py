@@ -4,7 +4,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from app.api.deps import require_permission
+from app.api.deps import require_permission_or_service
 from app.db.models.report import Report
 from app.db.models.user import Usuario
 from app.db.session import get_db
@@ -19,7 +19,7 @@ router = APIRouter(prefix="/reports", tags=["reports"])
 def create_report(
     payload: ReportRequest,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[Usuario, Depends(require_permission("reports", "generate"))],
+    user: Annotated[Usuario, Depends(require_permission_or_service("reports", "generate"))],
 ):
     rep = generate_report(
         db, payload.tipo, payload.formato,
@@ -35,7 +35,7 @@ def create_report(
 def download(
     report_id: str,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[Usuario, Depends(require_permission("reports", "read"))],
+    user: Annotated[Usuario, Depends(require_permission_or_service("reports", "read"))],
 ):
     rep = db.get(Report, report_id)
     if not rep:

@@ -6,6 +6,11 @@ __pycache__/
 venv/
 env/
 .env
+.env.*
+!.env.example
+
+# n8n exports with instance credentials
+n8n/credentials/
 
 # Node
 node_modules/

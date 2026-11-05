@@ -28,6 +28,7 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.RADAR_SERVICE_TOKEN }}" },
             { "name": "Content-Type", "value": "application/json" }
           ]
         },
@@ -57,6 +58,12 @@
       "parameters": {
         "method": "GET",
         "url": "={{ $env.RADAR_API_BASE }}/reports/{{ $json.report_id }}/download",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.RADAR_SERVICE_TOKEN }}" }
+          ]
+        },
         "options": { "response": { "response": { "responseFormat": "file", "outputPropertyName": "data" } } }
       },
       "id": "a0900000-0000-0000-0000-000000000005",

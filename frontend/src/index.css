@@ -8,12 +8,14 @@
     --foreground: 222 47% 11%;
     --muted: 210 40% 96%;
     --muted-foreground: 215 16% 47%;
-    --primary: 221 83% 53%;
+    --primary: 221 76% 42%;
     --primary-foreground: 0 0% 100%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
     --border: 214 32% 91%;
     --radius: 0.5rem;
   }
-  body { @apply bg-background text-foreground; }
+  body { @apply bg-background text-foreground antialiased; }
+  ::selection { background: hsl(var(--primary) / 0.15); }
+  :focus-visible { @apply outline-none ring-2 ring-primary ring-offset-2; }
 }

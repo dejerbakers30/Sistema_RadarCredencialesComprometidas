@@ -1,0 +1,18 @@
+{
+  "alta": {
+    "count": 12,
+    "percentage": 1.143947
+  },
+  "baja": {
+    "count": 1,
+    "percentage": 0.095329
+  },
+  "critica": {
+    "count": 675,
+    "percentage": 64.346997
+  },
+  "media": {
+    "count": 361,
+    "percentage": 34.413727
+  }
+}

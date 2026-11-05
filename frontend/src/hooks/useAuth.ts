@@ -10,6 +10,7 @@ interface TokenResponse {
   refresh_token: string;
   expires_in: number;
   mfa_required: boolean;
+  mfa_challenge_token?: string | null;
 }
 
 export function useLogin() {
@@ -22,7 +23,7 @@ export function useLogin() {
     },
     onSuccess: async (data, variables) => {
       if (data.mfa_required) {
-        setMfaPending(variables.email);
+        setMfaPending(`${variables.email}|${data.mfa_challenge_token ?? ""}`);
         navigate("/mfa");
         return;
       }
@@ -38,7 +39,7 @@ export function useMfaVerify() {
   const { setTokens, setUser, setMfaPending } = useAuthStore();
   const navigate = useNavigate();
   return useMutation({
-    mutationFn: async (payload: { email: string; code: string }) => {
+    mutationFn: async (payload: { email: string; code: string; challenge_token: string }) => {
       const { data } = await api.post<TokenResponse>("/auth/mfa/verify", payload);
       return data;
     },
@@ -53,12 +54,15 @@ export function useMfaVerify() {
 }
 
 export function useLogout() {
-  const logout = useAuthStore((s) => s.logout);
+  const { accessToken, logout } = useAuthStore();
   const navigate = useNavigate();
-  return useCallback(() => {
+  return useCallback(async () => {
+    if (accessToken) {
+      try { await api.post("/auth/logout"); } catch { /* local cleanup still required */ }
+    }
     logout();
     navigate("/login");
-  }, [logout, navigate]);
+  }, [accessToken, logout, navigate]);
 }
 
 export function useAuth() {

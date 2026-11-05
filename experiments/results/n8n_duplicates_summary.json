@@ -1,0 +1,15 @@
+{
+  "fixture_only": true,
+  "latency_denominator": 0,
+  "max_ms": "NO MEDIDA",
+  "mean_ms": "NO MEDIDA",
+  "median_ms": "NO MEDIDA",
+  "min_ms": "NO MEDIDA",
+  "n_fail": 5,
+  "n_success": 0,
+  "n_total": 5,
+  "notification_latency_measured": false,
+  "p95_ms": "NO MEDIDA",
+  "std_ms": "NO MEDIDA",
+  "success_rate": 0.0
+}

@@ -12,11 +12,13 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     expires_in: int
     mfa_required: bool = False
+    mfa_challenge_token: str | None = None
 
 
 class MFAVerifyRequest(BaseModel):
     email: EmailStr
     code: str = Field(..., min_length=6, max_length=6)
+    challenge_token: str
 
 
 class RefreshRequest(BaseModel):

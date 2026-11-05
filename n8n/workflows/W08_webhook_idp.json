@@ -17,7 +17,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst item = $input.first();\nconst secret = $env.IDP_HMAC_SECRET || '';\nconst sig = item.json.headers?.['x-radar-signature'] || '';\nconst raw = item.json.rawBody || JSON.stringify(item.json.body || {});\nconst expected = crypto.createHmac('sha256', secret).update(raw).digest('hex');\nconst ok = crypto.timingSafeEqual(Buffer.from(sig || ''), Buffer.from(expected));\nif (!ok) throw new Error('Firma HMAC inválida');\nconst body = typeof item.json.body === 'string' ? JSON.parse(item.json.body) : item.json.body;\nreturn [{ json: { ok, action: body.action, email: body.email, raw: body } }];"
+        "jsCode": "const crypto = require('crypto');\nconst item = $input.first();\nconst secret = $env.IDP_HMAC_SECRET || '';\nconst sig = item.json.headers?.['x-radar-signature'] || '';\nconst raw = item.json.rawBody || JSON.stringify(item.json.body || {});\nconst expected = crypto.createHmac('sha256', secret).update(raw).digest('hex');\nconst provided = Buffer.from(sig || '');\nconst expectedBuffer = Buffer.from(expected);\nif (provided.length !== expectedBuffer.length) throw new Error('Firma HMAC inválida');\nconst ok = crypto.timingSafeEqual(provided, expectedBuffer);\nif (!ok) throw new Error('Firma HMAC inválida');\nconst body = typeof item.json.body === 'string' ? JSON.parse(item.json.body) : item.json.body;\nreturn [{ json: { ok, action: body.action, email: body.email, raw: body } }];"
       },
       "id": "a0800000-0000-0000-0000-000000000002",
       "name": "Verify HMAC",

@@ -3,6 +3,17 @@
   "nodes": [
     {
       "parameters": {
+        "mode": "append",
+        "numberInputs": 2
+      },
+      "id": "a0300000-0000-0000-0000-00000000000a",
+      "name": "Sync IdP Responses",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [1420, 520]
+    },
+    {
+      "parameters": {
         "workflowInputs": {
           "values": [
             { "name": "leak_hit_id" },
@@ -173,7 +184,8 @@
     },
     {
       "parameters": {
-        "workflowId": "W15_NOTIFICACION",
+        "source": "database",
+        "workflowId": { "__rl": true, "value": "W15_NOTIFICACION", "mode": "list", "cachedResultName": "W15 - Utils Notificacion" },
         "workflowInputs": {
           "mappingMode": "defineBelow",
           "value": {
@@ -193,7 +205,8 @@
     },
     {
       "parameters": {
-        "workflowId": "W13_AUDITORIA",
+        "source": "database",
+        "workflowId": { "__rl": true, "value": "W13_AUDITORIA", "mode": "list", "cachedResultName": "W13 - Utils Auditoria" },
         "workflowInputs": {
           "mappingMode": "defineBelow",
           "value": {
@@ -229,8 +242,9 @@
         { "node": "Revoke Sessions", "type": "main", "index": 0 }
       ]]
     },
-    "Reset Password": { "main": [[{ "node": "Evaluate Result", "type": "main", "index": 0 }], []] },
-    "Revoke Sessions": { "main": [[{ "node": "Evaluate Result", "type": "main", "index": 0 }], []] },
+    "Reset Password": { "main": [[{ "node": "Sync IdP Responses", "type": "main", "index": 0 }], []] },
+    "Revoke Sessions": { "main": [[{ "node": "Sync IdP Responses", "type": "main", "index": 1 }], []] },
+    "Sync IdP Responses": { "main": [[{ "node": "Evaluate Result", "type": "main", "index": 0 }]] },
     "Evaluate Result": { "main": [[{ "node": "Insert Reset", "type": "main", "index": 0 }]] },
     "Insert Reset": { "main": [[{ "node": "Update Leak State", "type": "main", "index": 0 }]] },
     "Update Leak State": { "main": [[{ "node": "IF Exitoso", "type": "main", "index": 0 }]] },

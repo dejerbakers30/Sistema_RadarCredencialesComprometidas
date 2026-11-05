@@ -53,9 +53,9 @@
           "conditions": [
             {
               "id": "c1",
-              "leftValue": "={{ $json.payload }}",
-              "rightValue": "",
-              "operator": { "type": "string", "operation": "notEmpty" }
+            "leftValue": "={{ $json.payload != null }}",
+            "rightValue": true,
+            "operator": { "type": "boolean", "operation": "equals" }
             }
           ],
           "combinator": "and"
@@ -118,23 +118,16 @@
     {
       "parameters": {
         "source": "database",
-        "operation": "executeQuery",
-        "query": "SELECT nombre, \"BreachDate\", \"DataClasses\", \"Domain\" FROM (SELECT 1) x WHERE FALSE",
-        "options": {}
-      },
-      "id": "a0100000-0000-0000-0000-000000000009",
-      "name": "Placeholder Catalog",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.5,
-      "position": [1900, 300],
-      "credentials": { "postgres": { "id": "radar_pg", "name": "Radar PG" } },
-      "disabled": true,
-      "notes": "El catálogo de breaches se obtiene en W02 vía HIBP /breaches; este nodo queda como referencia."
-    },
-    {
-      "parameters": {
-        "workflowId": "W02_CORRELACION",
-        "options": { "waitForSubWorkflow": false }
+        "workflowId": { "__rl": true, "value": "W02_CORRELACION", "mode": "list", "cachedResultName": "W02 - Correlacion Directorio" },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "dominio": "={{ $json.dominio }}",
+            "email": "={{ $json.email }}",
+            "breach": "={{ $json.breach }}"
+          }
+        },
+        "options": { "waitForSubWorkflow": true }
       },
       "id": "a0100000-0000-0000-0000-000000000010",
       "name": "Trigger W02",
@@ -144,7 +137,8 @@
     },
     {
       "parameters": {
-        "workflowId": "W13_AUDITORIA",
+        "source": "database",
+        "workflowId": { "__rl": true, "value": "W13_AUDITORIA", "mode": "list", "cachedResultName": "W13 - Utils Auditoria" },
         "workflowInputs": {
           "mappingMode": "defineBelow",
           "value": {
@@ -152,7 +146,7 @@
             "accion": "collect",
             "resultado": "ok",
             "entidad": "dominios_monitoreados",
-            "entidad_id": "={{ $('Loop Dominios').item.json.id }}",
+            "entidad_id": "={{ String($('Loop Dominios').item.json.id) }}",
             "usuario_email": null,
             "detalle": "={{ JSON.stringify({ dominio: $('Loop Dominios').item.json.dominio }) }}"
           }
@@ -168,7 +162,7 @@
   "connections": {
     "Cron 03:00 UTC": { "main": [[{ "node": "Leer Dominios", "type": "main", "index": 0 }]] },
     "Leer Dominios": { "main": [[{ "node": "Loop Dominios", "type": "main", "index": 0 }]] },
-    "Loop Dominios": { "main": [[{ "node": "Check Cache", "type": "main", "index": 0 }]] },
+    "Loop Dominios": { "main": [[], [{ "node": "Check Cache", "type": "main", "index": 0 }]] },
     "Check Cache": { "main": [[{ "node": "IF Cache Hit", "type": "main", "index": 0 }]] },
     "IF Cache Hit": {
       "main": [
@@ -182,9 +176,13 @@
         [{ "node": "Guardar Cache", "type": "main", "index": 0 }]
       ]
     },
-    "Parse HIBP": { "main": [[{ "node": "Guardar Cache", "type": "main", "index": 0 }]] },
-    "Guardar Cache": { "main": [[{ "node": "Trigger W02", "type": "main", "index": 0 }]] },
-    "Trigger W02": { "main": [[{ "node": "Audit Collect", "type": "main", "index": 0 }]] }
+    "Parse HIBP": { "main": [[
+      { "node": "Guardar Cache", "type": "main", "index": 0 },
+      { "node": "Trigger W02", "type": "main", "index": 0 }
+    ]] },
+    "Guardar Cache": { "main": [[]] },
+    "Trigger W02": { "main": [[{ "node": "Audit Collect", "type": "main", "index": 0 }]] },
+    "Audit Collect": { "main": [[{ "node": "Loop Dominios", "type": "main", "index": 0 }]] }
   },
   "settings": {
     "executionOrder": "v1",
