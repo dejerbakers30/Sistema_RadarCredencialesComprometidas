@@ -1,0 +1,162 @@
+"""Ejecuta reset + invalidación de sesiones con registro en resets y auditoría."""
+from __future__ import annotations
+
+import logging
+from datetime import datetime, timedelta, timezone
+from uuid import UUID
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.core.config import settings
+from app.db.models.leak import LeakEstado, LeakHit
+from app.db.models.reset import Reset, ResetMetodo, ResetResultado
+from app.services.audit import write_audit
+from app.services.idp_client import BaseIdP, IdPResult
+from app.services.risk_engine import risk_engine
+
+logger = logging.getLogger(__name__)
+
+
+def _next_retry(intentos: int) -> datetime | None:
+    schedule = settings.RETRY_BACKOFF_SCHEDULE_MIN
+    if intentos - 1 >= len(schedule):
+        return None
+    return datetime.now(timezone.utc) + timedelta(minutes=schedule[intentos - 1])
+
+
+async def contain_leak(
+    db: Session,
+    idp: BaseIdP,
+    leak_hit_id: UUID,
+    metodo: ResetMetodo = ResetMetodo.automatico,
+    ejecutor_id: UUID | None = None,
+    password_candidata: str | None = None,
+) -> Reset:
+    hit = db.execute(select(LeakHit).where(LeakHit.id == leak_hit_id)).scalar_one_or_none()
+    if not hit:
+        raise ValueError(f"LeakHit {leak_hit_id} no existe")
+
+    # Desduplicación de contención: si ya hay reset exitoso, no repetir
+    existente = db.execute(
+        select(Reset).where(
+            Reset.leak_hit_id == leak_hit_id,
+            Reset.resultado == ResetResultado.exitoso,
+        )
+    ).scalar_one_or_none()
+    if existente:
+        logger.info("Leak %s ya contenido previamente", leak_hit_id)
+        return existente
+
+    # 1. Evaluación de riesgo mediante Machine Learning / Heurísticas de RiskEngine
+    if password_candidata is not None:
+        risk_score = risk_engine.evaluate(password_candidata)
+    elif hit.score_riesgo:
+        risk_score = hit.score_riesgo
+    else:
+        # Si no se provee contraseña explícita, se evalúa si hay contraseña expuesta
+        # o se aplica la postura conservadora SOC: riesgo Crítico si hay datos de password
+        datos = [d.lower() for d in (hit.datos_expuestos or [])]
+        if any("password" in d or "contraseña" in d for d in datos):
+            risk_score = "Crítico"
+        else:
+            risk_score = "Crítico"
+
+    hit.score_riesgo = risk_score
+    db.flush()
+
+    # 2. Si el riesgo es 'Bajo': no bloquear al usuario (marcar como falso positivo/omitido)
+    if risk_score == "Bajo":
+        hit.estado = LeakEstado.falso_positivo
+        reset = Reset(
+            leak_hit_id=leak_hit_id,
+            usuario_ejecutor=ejecutor_id,
+            timestamp=datetime.now(timezone.utc),
+            metodo=metodo,
+            resultado=ResetResultado.exitoso,
+            intentos=1,
+            idp_respuesta={
+                "skipped": True,
+                "motivo": "Riesgo evaluado como Bajo por RiskEngine; se omite bloqueo de usuario",
+                "score_riesgo": risk_score,
+            },
+        )
+        db.add(reset)
+        db.flush()
+
+        write_audit(
+            db,
+            modulo="resets",
+            accion="skip_low_risk" if metodo == ResetMetodo.automatico else "manual_skip_low_risk",
+            entidad="leak_hits",
+            entidad_id=str(leak_hit_id),
+            resultado="ok",
+            usuario_id=ejecutor_id,
+            usuario_email=None,
+            detalle={"reset_id": str(reset.id), "score_riesgo": risk_score, "accion": "no_bloqueado"},
+        )
+        db.commit()
+        logger.info("Contención omitida para leak %s: riesgo Bajo. Usuario no bloqueado.", leak_hit_id)
+        return reset
+
+    # 3. Riesgo Crítico o Medio: Ejecutar la contención en IdP
+    reset = Reset(
+        leak_hit_id=leak_hit_id,
+        usuario_ejecutor=ejecutor_id,
+        timestamp=datetime.now(timezone.utc),
+        metodo=metodo,
+        resultado=ResetResultado.pendiente,
+        intentos=1,
+    )
+    db.add(reset)
+    db.flush()
+
+    email = hit.email_corporativo
+    try:
+        pwd_res = await idp.reset_password(email)
+    except Exception as exc:
+        logger.exception("Fallo IdP al restablecer contraseña para leak %s", leak_hit_id)
+        pwd_res = IdPResult(False, error=str(exc))
+    try:
+        sess_res = await idp.revoke_sessions(email)
+    except Exception as exc:
+        logger.exception("Fallo IdP al revocar sesiones para leak %s", leak_hit_id)
+        sess_res = IdPResult(False, error=str(exc))
+
+    ok = pwd_res.ok and sess_res.ok
+    reset.idp_respuesta = {
+        "score_riesgo": risk_score,
+        "reset_password": {"ok": pwd_res.ok, "detail": pwd_res.detail, "error": pwd_res.error},
+        "revoke_sessions": {"ok": sess_res.ok, "detail": sess_res.detail, "error": sess_res.error},
+    }
+
+    if ok:
+        reset.resultado = ResetResultado.exitoso
+        hit.estado = LeakEstado.contenido
+        hit.fecha_contencion = datetime.now(timezone.utc)
+    else:
+        reset.resultado = ResetResultado.reintento
+        reset.proximo_intento = _next_retry(reset.intentos)
+        reset.error_detalle = f"pwd={pwd_res.error} sess={sess_res.error}"
+        if reset.proximo_intento is None:
+            reset.resultado = ResetResultado.fallido
+
+    write_audit(
+        db,
+        modulo="resets",
+        accion="auto_contain" if metodo == ResetMetodo.automatico else "manual_contain",
+        entidad="leak_hits",
+        entidad_id=str(leak_hit_id),
+        resultado="ok" if ok else "error",
+        usuario_id=ejecutor_id,
+        usuario_email=None,
+        detalle={
+            "reset_id": str(reset.id),
+            "resultado": reset.resultado.value,
+            "score_riesgo": risk_score,
+        },
+    )
+    db.flush()
+    db.commit()
+    logger.info("Contención leak=%s reset=%s resultado=%s riesgo=%s", leak_hit_id, reset.id, reset.resultado.value, risk_score)
+    return reset

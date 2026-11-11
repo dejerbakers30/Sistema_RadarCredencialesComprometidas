@@ -1,0 +1,7 @@
+{
+  "cases": 10,
+  "duplicate_events_sent": 40,
+  "duplicate_suppression_rate": 1.0,
+  "duplicates_suppressed": 40,
+  "repetitions_per_case": 5
+}

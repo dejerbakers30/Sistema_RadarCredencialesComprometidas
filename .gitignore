@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.env
+.env.*
+!.env.example
+
+# n8n exports with instance credentials
+n8n/credentials/
+
+# Node
+node_modules/
+dist/
+
+# Base de datos y logs
+*.sqlite3
+*.log
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Entorno de editores
+.vscode/
+.idea/
+backend/data/rockyou_sample.txt

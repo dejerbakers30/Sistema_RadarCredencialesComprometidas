@@ -1,0 +1,44 @@
+{
+  "name": "W13 - Utils Auditoria",
+  "nodes": [
+    {
+      "parameters": { "workflowInputs": { "values": [
+        { "name": "modulo" }, { "name": "accion" }, { "name": "resultado" },
+        { "name": "entidad" }, { "name": "entidad_id" }, { "name": "usuario_id" },
+        { "name": "usuario_email" }, { "name": "ip_origen" }, { "name": "user_agent" },
+        { "name": "detalle" }
+      ] } },
+      "id": "a1300000-0000-0000-0000-000000000001",
+      "name": "Input",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.RADAR_API_BASE }}/audit/internal",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "Authorization", "value": "=Bearer {{ $env.RADAR_SERVICE_TOKEN }}" },
+          { "name": "Content-Type", "value": "application/json" }
+        ] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ modulo: $json.modulo, accion: $json.accion, resultado: $json.resultado, entidad: $json.entidad || null, entidad_id: $json.entidad_id || null, usuario_id: $json.usuario_id || null, usuario_email: $json.usuario_email || null, ip_origen: $json.ip_origen || null, user_agent: $json.user_agent || null, detalle: typeof $json.detalle === 'string' ? JSON.parse($json.detalle) : ($json.detalle || null) }) }}",
+        "options": { "response": { "response": { "neverError": false, "fullResponse": true } } }
+      },
+      "id": "a1300000-0000-0000-0000-000000000002",
+      "name": "Registrar en FastAPI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [520, 300]
+    }
+  ],
+  "connections": {
+    "Input": { "main": [[{ "node": "Registrar en FastAPI", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false,
+  "tags": ["radar", "utils"]
+}

@@ -1,0 +1,15 @@
+{
+  "fixture_only": true,
+  "latency_denominator": 5,
+  "max_ms": 3553.22,
+  "mean_ms": 3551.627,
+  "median_ms": 3551.683,
+  "min_ms": 3549.899,
+  "n_fail": 0,
+  "n_success": 5,
+  "n_total": 5,
+  "notification_latency_measured": false,
+  "p95_ms": 3553.017,
+  "std_ms": 1.5147268730698433,
+  "success_rate": 1.0
+}

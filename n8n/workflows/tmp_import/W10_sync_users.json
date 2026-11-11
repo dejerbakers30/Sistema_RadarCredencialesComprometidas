@@ -1,0 +1,181 @@
+{
+  "name": "W10 - Sync Usuarios IdP",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 2 * * *"
+            }
+          ]
+        }
+      },
+      "id": "a1000000-0000-0000-0000-000000000001",
+      "name": "Cron 02:00 UTC",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.IDP_USERS_ENDPOINT }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.IDP_BEARER_TOKEN }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "id": "a1000000-0000-0000-0000-000000000002",
+      "name": "Fetch IdP Users",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        460,
+        300
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $input.first().json;\nconst body = typeof resp.body === 'string' ? JSON.parse(resp.body) : resp.body;\nconst users = body.value || body.users || [];\nconst out = users.map(u => ({\n  email: (u.mail || u.email || '').toLowerCase(),\n  nombre: u.displayName || u.name || '',\n  idp_subject: u.id || u.sub || '',\n  activo: u.accountEnabled !== false\n})).filter(u => u.email);\nreturn out.map(u => ({ json: u }));"
+      },
+      "id": "a1000000-0000-0000-0000-000000000003",
+      "name": "Normalize Users",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO usuarios (email, nombre, rol_id, activo, idp_subject)\nSELECT $1::citext, $2, (SELECT id FROM roles WHERE nombre = 'end_user'), $3, $4\nON CONFLICT (email) DO UPDATE\nSET nombre = EXCLUDED.nombre,\n    activo = EXCLUDED.activo,\n    idp_subject = EXCLUDED.idp_subject,\n    actualizado_en = now();",
+        "options": {
+          "queryReplacement": "={{ [ $json.email, $json.nombre, $json.activo, $json.idp_subject ] }}"
+        }
+      },
+      "id": "a1000000-0000-0000-0000-000000000004",
+      "name": "Upsert User",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        940,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "radar_pg",
+          "name": "Radar PG"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": "W13_AUDITORIA",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "modulo": "admin",
+            "accion": "sync_users",
+            "resultado": "ok",
+            "entidad": "usuarios",
+            "entidad_id": "={{ $json.email }}",
+            "usuario_email": null,
+            "detalle": "={{ JSON.stringify({ email: $json.email, activo: $json.activo }) }}"
+          }
+        }
+      },
+      "id": "a1000000-0000-0000-0000-000000000005",
+      "name": "Audit Sync",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1180,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Cron 02:00 UTC": {
+      "main": [
+        [
+          {
+            "node": "Fetch IdP Users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch IdP Users": {
+      "main": [
+        [
+          {
+            "node": "Normalize Users",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Normalize Users": {
+      "main": [
+        [
+          {
+            "node": "Upsert User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert User": {
+      "main": [
+        [
+          {
+            "node": "Audit Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "W12_ERROR_HANDLER"
+  },
+  "active": false,
+  "tags": [
+    {
+      "id": "radar",
+      "name": "radar"
+    },
+    {
+      "id": "sync",
+      "name": "sync"
+    }
+  ],
+  "id": "W10_sync_users"
+}

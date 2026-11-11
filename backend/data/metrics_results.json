@@ -1,0 +1,99 @@
+{
+  "timestamp": "2026-11-11T19:28:04.755221+00:00",
+  "dataset": {
+    "archivo": "rockyou_sample.txt",
+    "total_muestras": 10000,
+    "distribucion_ground_truth": {
+      "Débil": 6784,
+      "No Débil": 3216
+    }
+  },
+  "division_estratificada": {
+    "ratios": {
+      "train": 0.7,
+      "validation": 0.15,
+      "test": 0.15
+    },
+    "muestras": {
+      "train": 7000,
+      "validation": 1500,
+      "test": 1500
+    }
+  },
+  "modelo": {
+    "algoritmo": "RandomForestClassifier",
+    "hiperparametros": {
+      "n_estimators": 100,
+      "max_depth": 12,
+      "class_weight": "balanced",
+      "random_state": 42
+    }
+  },
+  "metricas_comparativas": {
+    "train": {
+      "accuracy": 0.9964285714285714,
+      "precision": 0.9997884045704613,
+      "recall": 0.9949463044851548,
+      "f1_score": 0.9973614775725593
+    },
+    "validation": {
+      "accuracy": 0.994,
+      "precision": 0.9980237154150198,
+      "recall": 0.9931170108161259,
+      "f1_score": 0.9955643173977329
+    },
+    "test": {
+      "accuracy": 0.992,
+      "precision": 1.0,
+      "recall": 0.9882121807465619,
+      "f1_score": 0.9940711462450593
+    }
+  },
+  "matriz_confusion_test": {
+    "labels": [
+      "Débil",
+      "No Débil"
+    ],
+    "matriz": [
+      [
+        1006,
+        12
+      ],
+      [
+        0,
+        482
+      ]
+    ],
+    "verdaderos_positivos": 1006,
+    "falsos_positivos": 0,
+    "verdaderos_negativos": 482,
+    "falsos_negativos": 12
+  },
+  "reporte_clasificacion_test": {
+    "Débil": {
+      "precision": 1.0,
+      "recall": 0.9882121807465619,
+      "f1-score": 0.9940711462450593,
+      "support": 1018.0
+    },
+    "No Débil": {
+      "precision": 0.9757085020242915,
+      "recall": 1.0,
+      "f1-score": 0.9877049180327869,
+      "support": 482.0
+    },
+    "accuracy": 0.992,
+    "macro avg": {
+      "precision": 0.9878542510121457,
+      "recall": 0.994106090373281,
+      "f1-score": 0.9908880321389231,
+      "support": 1500.0
+    },
+    "weighted avg": {
+      "precision": 0.9921943319838057,
+      "recall": 0.992,
+      "f1-score": 0.9920254649128492,
+      "support": 1500.0
+    }
+  }
+}

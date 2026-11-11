@@ -1,0 +1,13 @@
+{
+  "after_tamper_ok": false,
+  "before_tamper_ok": true,
+  "broken_ids": [
+    163
+  ],
+  "created_valid_events": 20,
+  "detection_latency_ms": 3.622,
+  "restored_ok": true,
+  "tamper_update_on_primary_rejected": true,
+  "tampered_record": 163,
+  "verified_at": "2026-11-05T16:18:28.869770Z"
+}

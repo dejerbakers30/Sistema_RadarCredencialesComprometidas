@@ -1,0 +1,5 @@
+# Tabla 3 — Métricas
+
+| FN | FP | TN | TP | accuracy | f1 | precision | recall | specificity |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 0 | 6 | 9 | 0.9375 | 0.947368 | 1.0 | 0.9 | 1.0 |

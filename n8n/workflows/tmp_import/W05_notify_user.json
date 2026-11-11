@@ -1,0 +1,91 @@
+{
+  "name": "W05 - Notify User (alias W15)",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "destinatario"
+            },
+            {
+              "name": "asunto"
+            },
+            {
+              "name": "cuerpo"
+            },
+            {
+              "name": "canal"
+            },
+            {
+              "name": "leak_hit_id"
+            }
+          ]
+        }
+      },
+      "id": "a0500000-0000-0000-0000-000000000001",
+      "name": "Input",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": "W15_notify",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "destinatario": "={{ $json.destinatario }}",
+            "asunto": "={{ $json.asunto }}",
+            "cuerpo": "={{ $json.cuerpo }}",
+            "canal": "={{ $json.canal }}",
+            "leak_hit_id": "={{ $json.leak_hit_id }}"
+          }
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "a0500000-0000-0000-0000-000000000002",
+      "name": "Call W15",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        460,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Input": {
+      "main": [
+        [
+          {
+            "node": "Call W15",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "W12_ERROR_HANDLER"
+  },
+  "active": false,
+  "tags": [
+    {
+      "id": "radar",
+      "name": "radar"
+    },
+    {
+      "id": "alias",
+      "name": "alias"
+    }
+  ],
+  "id": "W05_notify_user"
+}

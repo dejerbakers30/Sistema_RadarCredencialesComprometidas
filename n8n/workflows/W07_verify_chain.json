@@ -1,0 +1,68 @@
+{
+  "name": "W07 - Verificacion Cadena",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "hours", "hoursInterval": 6 }] } },
+      "id": "a0700000-0000-0000-0000-000000000001",
+      "name": "Cron 6h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.RADAR_API_BASE }}/audit/verify",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "Authorization", "value": "=Bearer {{ $env.RADAR_SERVICE_TOKEN }}" }
+        ] },
+        "options": { "response": { "response": { "neverError": false, "fullResponse": false } } }
+      },
+      "id": "a0700000-0000-0000-0000-000000000002",
+      "name": "Verificar en FastAPI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [520, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict" },
+          "conditions": [
+            { "id": "c1", "leftValue": "={{ $json.ok }}", "rightValue": false, "operator": { "type": "boolean", "operation": "false" } }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "a0700000-0000-0000-0000-000000000003",
+      "name": "IF Rota",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [780, 300]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": { "__rl": true, "value": "W06_ALERTA_ADMIN", "mode": "list", "cachedResultName": "W06 - Alerta Administrador" },
+        "workflowInputs": { "mappingMode": "defineBelow", "value": {
+          "mensaje": "={{ 'Cadena de auditoría rota en IDs: ' + ($json.broken || []).join(', ') }}",
+          "severidad": "critica"
+        } }
+      },
+      "id": "a0700000-0000-0000-0000-000000000004",
+      "name": "Alert Chain Broken",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [1040, 220]
+    }
+  ],
+  "connections": {
+    "Cron 6h": { "main": [[{ "node": "Verificar en FastAPI", "type": "main", "index": 0 }]] },
+    "Verificar en FastAPI": { "main": [[{ "node": "IF Rota", "type": "main", "index": 0 }]] },
+    "IF Rota": { "main": [[{ "node": "Alert Chain Broken", "type": "main", "index": 0 }], []] }
+  },
+  "settings": { "executionOrder": "v1", "errorWorkflow": "W12_ERROR_HANDLER" },
+  "active": false,
+  "tags": ["radar", "audit"]
+}

@@ -1,0 +1,21 @@
+{
+  "http_status": 404,
+  "response_headers": {
+    "CF-RAY": "a55d224288eae9ae-SCL",
+    "Cache-Control": "\"public, max-age=600\"",
+    "Cf-Placement": "remote-SJC",
+    "Connection": "close",
+    "Content-Type": "text/plain;charset=UTF-8",
+    "Date": "Thu, 05 Nov 2026 16:11:21 GMT",
+    "Permissions-Policy": "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=(), interest-cohort=()",
+    "Server": "cloudflare",
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
+    "Transfer-Encoding": "chunked",
+    "Vary": "accept-encoding",
+    "X-Content-Type-Options": "nosniff",
+    "alt-svc": "h3=\":443\"; ma=86400"
+  },
+  "retrieved_at": "2026-11-05T16:11:17.724976Z",
+  "url": "https://haveibeenpwned.com/api/v3/breachedAccount/permanent-opt-out%40hibp-integration-tests.com?truncateResponse=false",
+  "user_agent": "RadarCreds-UNT-Research/1.0"
+}

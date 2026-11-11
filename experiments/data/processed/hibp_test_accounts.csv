@@ -1,0 +1,17 @@
+case_id,email,expected_positive,expected_breach_count,scenario,http_status,observed_breach_count,observed_breaches,is_correct,retrieved_at
+account-exists,account-exists@hibp-integration-tests.com,True,1,one breach and paste,200,1,Adobe,True,2026-11-05T16:11:17.724976Z
+multiple-breaches,multiple-breaches@hibp-integration-tests.com,True,3,three breaches,200,3,Adobe;Stratfor;Gawker,True,2026-11-05T16:11:17.724976Z
+not-active-and-active-breach,not-active-and-active-breach@hibp-integration-tests.com,True,1,one active breach,200,1,Adobe,True,2026-11-05T16:11:17.724976Z
+not-active-breach,not-active-breach@hibp-integration-tests.com,False,0,no active breaches,404,0,,True,2026-11-05T16:11:17.724976Z
+opt-out,opt-out@hibp-integration-tests.com,False,0,opted out,404,0,,True,2026-11-05T16:11:17.724976Z
+opt-out-breach,opt-out-breach@hibp-integration-tests.com,False,0,opted out,404,0,,True,2026-11-05T16:11:17.724976Z
+paste-sensitive-breach,paste-sensitive-breach@hibp-integration-tests.com,False,0,no public account breaches,404,0,,True,2026-11-05T16:11:17.724976Z
+permanent-opt-out,permanent-opt-out@hibp-integration-tests.com,False,0,permanently opted out,404,0,,True,2026-11-05T16:11:17.724976Z
+sensitive-and-other-breaches,sensitive-and-other-breaches@hibp-integration-tests.com,True,2,two non-sensitive breaches returned,200,2,Adobe;Stratfor,True,2026-11-05T16:11:17.724976Z
+sensitive-breach,sensitive-breach@hibp-integration-tests.com,False,0,sensitive-only breach is not returned,404,0,,True,2026-11-05T16:11:17.724976Z
+spam-list-only,spam-list-only@hibp-integration-tests.com,True,1,one spam-list breach,200,1,OnlinerSpambot,True,2026-11-05T16:11:17.724976Z
+spam-list-and-others,spam-list-and-others@hibp-integration-tests.com,True,,multiple breaches; exact count not specified,200,3,Adobe;Dropbox;OnlinerSpambot,True,2026-11-05T16:11:17.724976Z
+subscription-free-and-other-breaches,subscription-free-and-other-breaches@hibp-integration-tests.com,True,3,one subscription-free and two other breaches,200,2,Adobe;Dropbox,False,2026-11-05T16:11:17.724976Z
+stealer-log,stealer-log@hibp-integration-tests.com,True,1,one stealer-log breach,200,1,StealerLogsJan2025,True,2026-11-05T16:11:17.724976Z
+subscription-free-breach,subscription-free-breach@hibp-integration-tests.com,True,1,one subscription-free breach,404,0,,False,2026-11-05T16:11:17.724976Z
+unverified-breach,unverified-breach@hibp-integration-tests.com,True,1,one unverified breach,200,1,AntiPublic,True,2026-11-05T16:11:17.724976Z
