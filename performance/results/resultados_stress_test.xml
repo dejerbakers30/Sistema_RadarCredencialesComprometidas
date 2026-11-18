@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jmeterPerformanceReport version="1.0" xmlns="http://radar-creds.local/performance/report">
+  <metadata>
+    <systemName>Radar de Credenciales Comprometidas</systemName>
+    <projectStage>Ingeniería de Software II - Fase 0 / Pruebas de Rendimiento</projectStage>
+    <tool>Apache JMeter 5.6.3</tool>
+    <testPlanFile>radar_performance_test.jmx</testPlanFile>
+    <executionTimestamp>2026-11-18T16:38:26-05:00</executionTimestamp>
+    <testType>Stress Test (Punto de Saturación)</testType>
+    <durationFormatted>00:01:11</durationFormatted>
+    <durationSeconds>71</durationSeconds>
+    <concurrentUsers>25</concurrentUsers>
+    <rampUpSeconds>10</rampUpSeconds>
+    <mode>Start sin pausas (Think Time deshabilitado)</mode>
+    <architectureEnvironment>
+      <backendServer>FastAPI + Uvicorn (Single Worker)</backendServer>
+      <databaseEngine>PostgreSQL 16 (Contenedor Docker - Puerto 5433:5432)</databaseEngine>
+      <dbConnectionPool>SQLAlchemy (pool_size=10, max_overflow=20)</dbConnectionPool>
+      <clientTimeoutConfigMs>15000</clientTimeoutConfigMs>
+    </architectureEnvironment>
+  </metadata>
+
+  <overallMetrics>
+    <totalSamples>1073</totalSamples>
+    <averageLatencyMs>2892</averageLatencyMs>
+    <minLatencyMs>20</minLatencyMs>
+    <maxLatencyMs>15070</maxLatencyMs>
+    <stdDevMs>5836.69</stdDevMs>
+    <errorPercentage>18.83</errorPercentage>
+    <throughputPerSecond>4.4</throughputPerSecond>
+    <networkBandwidth>
+      <receivedKbPerSecond>5.32</receivedKbPerSecond>
+      <sentKbPerSecond>1.66</sentKbPerSecond>
+      <avgBytesPerRequest>1235.3</avgBytesPerRequest>
+    </networkBandwidth>
+    <verdict>PUNTO_DE_SATURACION_IDENTIFICADO</verdict>
+  </overallMetrics>
+
+  <samplersSummary>
+    <!-- Login de autenticación -->
+    <sampler id="1" name="POST_Auth_Login">
+      <endpoint>/api/v1/auth/login</endpoint>
+      <method>POST</method>
+      <samples>3</samples>
+      <averageMs>10103</averageMs>
+      <minMs>226</minMs>
+      <maxMs>15070</maxMs>
+      <stdDevMs>6984.13</stdDevMs>
+      <errorPercentage>66.67</errorPercentage>
+      <throughput>1.0/min</throughput>
+      <receivedKbPerSecond>0.03</receivedKbPerSecond>
+      <sentKbPerSecond>0.00</sentKbPerSecond>
+      <avgBytes>2065.0</avgBytes>
+      <observations>Sobrecarga por PBKDF2 (100k iteraciones) y timeout en peticiones recurrentes.</observations>
+    </sampler>
+
+    <!-- Resumen de Dashboard -->
+    <sampler id="2" name="GET_Dashboard_Summary">
+      <endpoint>/api/v1/dashboard/summary?dias=30</endpoint>
+      <method>GET</method>
+      <samples>187</samples>
+      <averageMs>3672</averageMs>
+      <minMs>28</minMs>
+      <maxMs>15029</maxMs>
+      <stdDevMs>6383.34</stdDevMs>
+      <errorPercentage>24.06</errorPercentage>
+      <throughputPerSecond>2.7</throughputPerSecond>
+      <receivedKbPerSecond>3.00</receivedKbPerSecond>
+      <sentKbPerSecond>0.95</sentKbPerSecond>
+      <avgBytes>1154.6</avgBytes>
+      <observations>Endpoint más crítico. Ejecuta 5 consultas SQL con agregación temporal y agrupamiento relacional.</observations>
+    </sampler>
+
+    <!-- KPIs del Sistema -->
+    <sampler id="3" name="GET_Leaks_KPIs">
+      <endpoint>/api/v1/leaks/kpis</endpoint>
+      <method>GET</method>
+      <samples>178</samples>
+      <averageMs>2350</averageMs>
+      <minMs>25</minMs>
+      <maxMs>15016</maxMs>
+      <stdDevMs>5354.64</stdDevMs>
+      <errorPercentage>15.17</errorPercentage>
+      <throughputPerSecond>2.6</throughputPerSecond>
+      <receivedKbPerSecond>1.53</receivedKbPerSecond>
+      <sentKbPerSecond>1.00</sentKbPerSecond>
+      <avgBytes>606.0</avgBytes>
+      <observations>Cálculo de métricas de contención y promedios MTTD/MTTC en base de datos.</observations>
+    </sampler>
+
+    <!-- Listado Paginado de Filtraciones -->
+    <sampler id="4" name="GET_Leaks_List_Paginado">
+      <endpoint>/api/v1/leaks?limit=50&amp;offset=0</endpoint>
+      <method>GET</method>
+      <samples>170</samples>
+      <averageMs>2538</averageMs>
+      <minMs>20</minMs>
+      <maxMs>15027</maxMs>
+      <stdDevMs>5538.64</stdDevMs>
+      <errorPercentage>16.47</errorPercentage>
+      <throughputPerSecond>2.5</throughputPerSecond>
+      <receivedKbPerSecond>4.74</receivedKbPerSecond>
+      <sentKbPerSecond>0.96</sentKbPerSecond>
+      <avgBytes>1975.6</avgBytes>
+      <observations>Consulta relacional paginada con serialización de 50 registros Pydantic.</observations>
+    </sampler>
+  </samplersSummary>
+
+  <technicalRootCauseAnalysis>
+    <bottleneckLayer>Capa de Persistencia y Concurrencia de Workers</bottleneckLayer>
+    <primaryFactor>Agotamiento del pool de conexiones de SQLAlchemy (pool_size=10 + max_overflow=20) ante 25 hilos continuos sin pausas.</primaryFactor>
+    <secondaryFactor>Tiempo límite de socket alcanzado (timeout configurado en 15,000 ms), provocando errores de tipo SocketTimeoutException (Max = 15,070 ms).</secondaryFactor>
+    <recommendation>Para entornos de producción de alta demanda: incrementar el pool de conexiones en app/core/config.py (DB_POOL_SIZE=30, DB_MAX_OVERFLOW=50) y desplegar Uvicorn con múltiples procesos worker (--workers 4).</recommendation>
+  </technicalRootCauseAnalysis>
+</jmeterPerformanceReport>
+
