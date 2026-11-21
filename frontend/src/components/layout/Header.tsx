@@ -1,17 +1,22 @@
-import { Bell, LogOut, UserCircle } from "lucide-react";
+import { Bell, LogOut, Moon, Sun, UserCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import { useLogout } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
+import { useUIStore } from "@/stores/uiStore";
 import { Breadcrumbs } from "./Breadcrumbs";
 
 export function Header() {
   const user = useAuthStore((s) => s.user);
   const logout = useLogout();
+  const theme = useUIStore((s) => s.theme);
+  const setTheme = useUIStore((s) => s.setTheme);
+  const dark = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
   return (
     <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur sm:px-6">
       <Breadcrumbs />
       <div className="flex items-center gap-2 sm:gap-4">
+        <Button variant="ghost" size="icon" onClick={() => setTheme(dark ? "light" : "dark")} aria-label={dark ? "Activar tema claro" : "Activar tema oscuro"} title={dark ? "Tema claro" : "Tema oscuro"}>{dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}</Button>
         <Link to="/notifications" className="relative rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Notificaciones"><Bell className="h-5 w-5" /><span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-primary" /></Link>
         <div className="hidden text-right sm:block"><div className="text-sm font-semibold text-slate-800">{user?.nombre}</div><div className="text-xs capitalize text-slate-500">{user?.rol?.replace("_", " ")}</div></div>
         <Link to="/profile" className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-50 text-primary" aria-label="Abrir perfil"><UserCircle className="h-5 w-5" /></Link>

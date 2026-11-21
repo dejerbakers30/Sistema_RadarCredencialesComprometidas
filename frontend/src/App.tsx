@@ -7,6 +7,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
 import Login from "@/pages/Login";
 import MfaVerify from "@/pages/MfaVerify";
+const Training = lazy(() => import("@/pages/Training"));
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const LeaksList = lazy(() => import("@/pages/LeaksList"));
 const LeakDetail = lazy(() => import("@/pages/LeakDetail"));
@@ -48,6 +49,7 @@ export default function App() {
 
               <Route element={<ProtectedRoute action="read" subject="reports" />}>
                 <Route path="/reports" element={<Reports />} />
+                <Route path="/training" element={<Training />} />
               </Route>
 
               <Route element={<ProtectedRoute action="read" subject="audit" />}>

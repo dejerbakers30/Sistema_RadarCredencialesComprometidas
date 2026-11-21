@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import select
@@ -22,7 +22,7 @@ def _next_retry(intentos: int) -> datetime | None:
     schedule = settings.RETRY_BACKOFF_SCHEDULE_MIN
     if intentos - 1 >= len(schedule):
         return None
-    return datetime.now(timezone.utc) + timedelta(minutes=schedule[intentos - 1])
+    return datetime.now(UTC) + timedelta(minutes=schedule[intentos - 1])
 
 
 async def contain_leak(
@@ -65,45 +65,12 @@ async def contain_leak(
     hit.score_riesgo = risk_score
     db.flush()
 
-    # 2. Si el riesgo es 'Bajo': no bloquear al usuario (marcar como falso positivo/omitido)
-    if risk_score == "Bajo":
-        hit.estado = LeakEstado.falso_positivo
-        reset = Reset(
-            leak_hit_id=leak_hit_id,
-            usuario_ejecutor=ejecutor_id,
-            timestamp=datetime.now(timezone.utc),
-            metodo=metodo,
-            resultado=ResetResultado.exitoso,
-            intentos=1,
-            idp_respuesta={
-                "skipped": True,
-                "motivo": "Riesgo evaluado como Bajo por RiskEngine; se omite bloqueo de usuario",
-                "score_riesgo": risk_score,
-            },
-        )
-        db.add(reset)
-        db.flush()
-
-        write_audit(
-            db,
-            modulo="resets",
-            accion="skip_low_risk" if metodo == ResetMetodo.automatico else "manual_skip_low_risk",
-            entidad="leak_hits",
-            entidad_id=str(leak_hit_id),
-            resultado="ok",
-            usuario_id=ejecutor_id,
-            usuario_email=None,
-            detalle={"reset_id": str(reset.id), "score_riesgo": risk_score, "accion": "no_bloqueado"},
-        )
-        db.commit()
-        logger.info("Contención omitida para leak %s: riesgo Bajo. Usuario no bloqueado.", leak_hit_id)
-        return reset
-
-    # 3. Riesgo Crítico o Medio: Ejecutar la contención en IdP
+    # La fortaleza de una contraseña candidata no refuta una exposición confirmada.
+    # La contención sigue la política SOC independientemente de la debilidad estimada.
     reset = Reset(
         leak_hit_id=leak_hit_id,
         usuario_ejecutor=ejecutor_id,
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         metodo=metodo,
         resultado=ResetResultado.pendiente,
         intentos=1,
@@ -133,7 +100,7 @@ async def contain_leak(
     if ok:
         reset.resultado = ResetResultado.exitoso
         hit.estado = LeakEstado.contenido
-        hit.fecha_contencion = datetime.now(timezone.utc)
+        hit.fecha_contencion = datetime.now(UTC)
     else:
         reset.resultado = ResetResultado.reintento
         reset.proximo_intento = _next_retry(reset.intentos)

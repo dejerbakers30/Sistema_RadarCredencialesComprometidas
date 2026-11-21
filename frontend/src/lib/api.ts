@@ -59,8 +59,10 @@ api.interceptors.response.use(
 
 export function extractErrorMessage(err: unknown): string {
   if (axios.isAxiosError(err)) {
-    const data = err.response?.data as { detail?: string } | undefined;
-    return data?.detail ?? err.message;
+    const data = err.response?.data as { detail?: unknown } | undefined;
+    if (typeof data?.detail === "string") return data.detail;
+    if (Array.isArray(data?.detail)) return "Configuración inválida. Revisa los campos y sus límites.";
+    return err.message;
   }
   return err instanceof Error ? err.message : "Error desconocido";
 }

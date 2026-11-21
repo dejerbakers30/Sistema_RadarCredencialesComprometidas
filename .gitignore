@@ -28,3 +28,6 @@ Thumbs.db
 .vscode/
 .idea/
 backend/data/rockyou_sample.txt
+
+# Artefactos y características privadas del laboratorio
+backend/runtime/

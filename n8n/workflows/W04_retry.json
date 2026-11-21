@@ -3,13 +3,23 @@
   "nodes": [
     {
       "parameters": {
-        "rule": { "interval": [{ "field": "minutes", "minutesInterval": 15 }] }
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
       },
       "id": "a0400000-0000-0000-0000-000000000001",
       "name": "Cron 15min",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [220, 300]
+      "position": [
+        220,
+        300
+      ]
     },
     {
       "parameters": {
@@ -21,17 +31,31 @@
       "name": "Leer Pendientes",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [460, 300],
-      "credentials": { "postgres": { "id": "radar_pg", "name": "Radar PG" } },
+      "position": [
+        460,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "radar_pg",
+          "name": "Radar PG"
+        }
+      },
       "alwaysOutputData": true
     },
     {
-      "parameters": { "batchSize": 1, "options": {} },
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
       "id": "a0400000-0000-0000-0000-000000000003",
       "name": "Loop Pendientes",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
-      "position": [700, 300]
+      "position": [
+        700,
+        300
+      ]
     },
     {
       "parameters": {
@@ -41,7 +65,10 @@
       "name": "Prepare Retry",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [940, 300]
+      "position": [
+        940,
+        300
+      ]
     },
     {
       "parameters": {
@@ -50,20 +77,36 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Content-Type", "value": "application/json" },
-            { "name": "X-Radar-Signature", "value": "={{ $json.reset_sig }}" }
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Radar-Signature",
+              "value": "={{ $json.reset_sig }}"
+            }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ $json.reset_body }}",
-        "options": { "response": { "response": { "neverError": true, "fullResponse": true } } }
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "fullResponse": true
+            }
+          }
+        }
       },
       "id": "a0400000-0000-0000-0000-000000000005",
       "name": "Retry Reset",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1180, 220],
+      "position": [
+        1180,
+        220
+      ],
       "onError": "continueErrorOutput"
     },
     {
@@ -73,55 +116,90 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Content-Type", "value": "application/json" },
-            { "name": "X-Radar-Signature", "value": "={{ $json.revoke_sig }}" }
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Radar-Signature",
+              "value": "={{ $json.revoke_sig }}"
+            }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ $json.revoke_body }}",
-        "options": { "response": { "response": { "neverError": true, "fullResponse": true } } }
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "fullResponse": true
+            }
+          }
+        }
       },
       "id": "a0400000-0000-0000-0000-000000000006",
       "name": "Retry Revoke",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1180, 380],
+      "position": [
+        1180,
+        380
+      ],
       "onError": "continueErrorOutput"
     },
     {
       "parameters": {
-        "jsCode": "const reset = $('Retry Reset').first().json;\nconst revoke = $('Retry Revoke').first().json;\nconst row = $('Prepare Retry').first().json;\nconst ok = reset.statusCode >= 200 && reset.statusCode < 300 && revoke.statusCode >= 200 && revoke.statusCode < 300;\nconst intentos = (row.intentos || 1) + 1;\nconst schedule = [15, 30, 60, 240, 1440];\nconst agotado = intentos >= 5;\nconst proximo = agotado ? null : new Date(Date.now() + schedule[Math.min(intentos - 1, schedule.length - 1)] * 60000).toISOString();\nreturn [{ json: { reset_id: row.reset_id, leak_hit_id: row.leak_hit_id, email: row.email_corporativo, ok, intentos, agotado, proximo_intento: proximo } }];"
+        "jsCode": "const reset = $('Retry Reset').first().json;\nconst revoke = $('Retry Revoke').first().json;\nconst row = $('Prepare Retry').first().json;\nconst statuses = [Number(reset.statusCode || 0), Number(revoke.statusCode || 0)];\nconst ok = statuses.every(s => s >= 200 && s < 300);\nconst permanent = statuses.some(s => s >= 400 && s < 500 && s !== 429);\nconst intentos = (row.intentos || 1) + 1;\nconst agotado = permanent || intentos >= 5;\nconst schedule = [15, 30, 60, 240, 1440];\nconst proximo = ok || agotado ? null : new Date(Date.now() + schedule[Math.min(intentos - 1, schedule.length - 1)] * 60000).toISOString();\nreturn [{ json: { reset_id: row.reset_id, leak_hit_id: row.leak_hit_id, email: row.email_corporativo, ok, intentos, agotado, proximo_intento: proximo } }];"
       },
       "id": "a0400000-0000-0000-0000-000000000007",
       "name": "Evaluate Retry",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1420, 300]
+      "position": [
+        1420,
+        300
+      ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "UPDATE resets\nSET resultado = CASE WHEN $2 THEN 'exitoso'::reset_resultado WHEN $3 THEN 'fallido'::reset_resultado ELSE 'reintento'::reset_resultado END,\n    intentos = $4,\n    proximo_intento = $5::timestamptz,\n    idp_respuesta = $6::jsonb\nWHERE id = $1::uuid;",
-        "options": { "queryReplacement": "={{ [ $json.reset_id, $json.ok, $json.agotado, $json.intentos, $json.proximo_intento, JSON.stringify({ retry: true }) ] }}" }
+        "query": "UPDATE resets\nSET resultado = CASE WHEN $2 THEN 'exitoso'::reset_resultado WHEN $3 THEN 'fallido'::reset_resultado ELSE 'reintento'::reset_resultado END,\n    intentos = $4,\n    proximo_intento = $5::timestamptz,\n    idp_respuesta = $6::jsonb\nWHERE id = $1::uuid RETURNING id AS reset_id, leak_hit_id, $2::boolean AS ok, $3::boolean AS agotado;",
+        "options": {
+          "queryReplacement": "={{ [ $json.reset_id, $json.ok, $json.agotado, $json.intentos, $json.proximo_intento, JSON.stringify({ retry: true }) ] }}"
+        }
       },
       "id": "a0400000-0000-0000-0000-000000000008",
       "name": "Update Reset",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [1660, 300],
-      "credentials": { "postgres": { "id": "radar_pg", "name": "Radar PG" } }
+      "position": [
+        1660,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "radar_pg",
+          "name": "Radar PG"
+        }
+      }
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "typeValidation": "strict" },
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
           "conditions": [
             {
               "id": "c1",
               "leftValue": "={{ $json.ok }}",
               "rightValue": true,
-              "operator": { "type": "boolean", "operation": "true" }
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
             }
           ],
           "combinator": "and"
@@ -131,20 +209,33 @@
       "name": "IF Exitoso",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [1900, 300]
+      "position": [
+        1900,
+        300
+      ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
         "query": "UPDATE leak_hits SET estado = 'contenido', fecha_contencion = now(), actualizado_en = now() WHERE id = $1::uuid;",
-        "options": { "queryReplacement": "={{ [$json.leak_hit_id] }}" }
+        "options": {
+          "queryReplacement": "={{ [$json.leak_hit_id] }}"
+        }
       },
       "id": "a0400000-0000-0000-0000-000000000010",
       "name": "Mark Contenido",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [2140, 220],
-      "credentials": { "postgres": { "id": "radar_pg", "name": "Radar PG" } }
+      "position": [
+        2140,
+        220
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "radar_pg",
+          "name": "Radar PG"
+        }
+      }
     },
     {
       "parameters": {
@@ -161,27 +252,218 @@
       "name": "Alert Agotado",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.2,
-      "position": [2140, 380]
+      "position": [
+        2140,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 2
+      },
+      "id": "course-retry-sync",
+      "name": "Sync Retry Responses",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1250,
+        350
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.agotado }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "course-retry-exhausted",
+      "name": "IF Agotado",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1700,
+        550
+      ]
     }
   ],
   "connections": {
-    "Cron 15min": { "main": [[{ "node": "Leer Pendientes", "type": "main", "index": 0 }]] },
-    "Leer Pendientes": { "main": [[{ "node": "Loop Pendientes", "type": "main", "index": 0 }]] },
-    "Loop Pendientes": { "main": [[{ "node": "Prepare Retry", "type": "main", "index": 0 }]] },
-    "Prepare Retry": {
-      "main": [[
-        { "node": "Retry Reset", "type": "main", "index": 0 },
-        { "node": "Retry Revoke", "type": "main", "index": 0 }
-      ]]
+    "Cron 15min": {
+      "main": [
+        [
+          {
+            "node": "Leer Pendientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
-    "Retry Reset": { "main": [[{ "node": "Evaluate Retry", "type": "main", "index": 0 }], []] },
-    "Retry Revoke": { "main": [[{ "node": "Evaluate Retry", "type": "main", "index": 0 }], []] },
-    "Evaluate Retry": { "main": [[{ "node": "Update Reset", "type": "main", "index": 0 }]] },
-    "Update Reset": { "main": [[{ "node": "IF Exitoso", "type": "main", "index": 0 }]] },
+    "Leer Pendientes": {
+      "main": [
+        [
+          {
+            "node": "Loop Pendientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Pendientes": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Prepare Retry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Retry": {
+      "main": [
+        [
+          {
+            "node": "Retry Reset",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Retry Revoke",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retry Reset": {
+      "main": [
+        [
+          {
+            "node": "Sync Retry Responses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retry Revoke": {
+      "main": [
+        [
+          {
+            "node": "Sync Retry Responses",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Evaluate Retry": {
+      "main": [
+        [
+          {
+            "node": "Update Reset",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Reset": {
+      "main": [
+        [
+          {
+            "node": "IF Exitoso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "IF Exitoso": {
       "main": [
-        [{ "node": "Mark Contenido", "type": "main", "index": 0 }],
-        [{ "node": "Alert Agotado", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Mark Contenido",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IF Agotado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sync Retry Responses": {
+      "main": [
+        [
+          {
+            "node": "Evaluate Retry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Agotado": {
+      "main": [
+        [
+          {
+            "node": "Alert Agotado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Pendientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Contenido": {
+      "main": [
+        [
+          {
+            "node": "Loop Pendientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alert Agotado": {
+      "main": [
+        [
+          {
+            "node": "Loop Pendientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },
@@ -190,5 +472,8 @@
     "errorWorkflow": "W12_ERROR_HANDLER"
   },
   "active": false,
-  "tags": ["radar", "retry"]
+  "tags": [
+    "radar",
+    "retry"
+  ]
 }

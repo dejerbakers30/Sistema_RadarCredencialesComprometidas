@@ -10,7 +10,7 @@ from redis import Redis
 from sqlalchemy import text
 
 from app.api.v1 import (
-    auth, audit, dashboard, leaks, notifications, reports, resets, roles, sources, users, webhooks,
+    auth, audit, dashboard, leaks, notifications, reports, resets, roles, sources, users, webhooks, training,
 )
 from app.core.config import settings
 from app.core.logging import configure_logging
@@ -114,3 +114,5 @@ app.include_router(reports.router, prefix=API)
 app.include_router(audit.router, prefix=API)
 app.include_router(sources.router, prefix=API)
 app.include_router(webhooks.router, prefix=API)
+
+app.include_router(training.router, prefix=API)

@@ -24,6 +24,9 @@ class LeakHitCreate(LeakHitBase):
 
 class LeakHitRead(LeakHitBase):
     model_config = ConfigDict(from_attributes=True)
+    # Los DTO de lectura también deben serializar direcciones .test persistidas por fixtures.
+    # La creación de entradas conserva EmailStr en LeakHitBase.
+    email_corporativo: str
     id: UUID
     usuario_id: UUID | None
     fecha_deteccion: datetime

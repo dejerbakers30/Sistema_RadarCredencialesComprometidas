@@ -3,6 +3,7 @@ import { ChevronRight } from "lucide-react";
 
 const LABELS: Record<string, string> = {
   dashboard: "Panel",
+  training: "Laboratorio IA",
   leaks: "Filtraciones",
   resets: "Contenciones",
   reports: "Reportes",

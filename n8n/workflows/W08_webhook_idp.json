@@ -6,24 +6,32 @@
         "httpMethod": "POST",
         "path": "radar/idp/callback",
         "responseMode": "responseNode",
-        "options": { "rawBody": true }
+        "options": {
+          "rawBody": true
+        }
       },
       "id": "a0800000-0000-0000-0000-000000000001",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [220, 300],
+      "position": [
+        200,
+        300
+      ],
       "webhookId": "radar-idp-callback"
     },
     {
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst item = $input.first();\nconst secret = $env.IDP_HMAC_SECRET || '';\nconst sig = item.json.headers?.['x-radar-signature'] || '';\nconst raw = item.json.rawBody || JSON.stringify(item.json.body || {});\nconst expected = crypto.createHmac('sha256', secret).update(raw).digest('hex');\nconst provided = Buffer.from(sig || '');\nconst expectedBuffer = Buffer.from(expected);\nif (provided.length !== expectedBuffer.length) throw new Error('Firma HMAC inválida');\nconst ok = crypto.timingSafeEqual(provided, expectedBuffer);\nif (!ok) throw new Error('Firma HMAC inválida');\nconst body = typeof item.json.body === 'string' ? JSON.parse(item.json.body) : item.json.body;\nreturn [{ json: { ok, action: body.action, email: body.email, raw: body } }];"
+        "jsCode": "const crypto = require('crypto');\nconst item = $input.first();\nconst secret = $env.IDP_HMAC_SECRET || '';\nif (!secret) throw new Error('Configuración HMAC no disponible');\nconst sig = String(item.json.headers?.['x-radar-signature'] || '');\nconst raw = item.binary?.data\n  ? await this.helpers.getBinaryDataBuffer(0, 'data')\n  : Buffer.from(item.json.rawBody || JSON.stringify(item.json.body || {}));\nconst expected = crypto.createHmac('sha256', secret).update(raw).digest();\nconst provided = /^[a-fA-F0-9]{64}$/.test(sig) ? Buffer.from(sig, 'hex') : Buffer.alloc(0);\nconst ok = provided.length === expected.length && crypto.timingSafeEqual(provided, expected);\nif (!ok) return [{ json: { ok: false } }];\nconst body = JSON.parse(raw.toString('utf8'));\nreturn [{ json: { ok: true, action: body.action, email: body.email, raw: body } }];"
       },
       "id": "a0800000-0000-0000-0000-000000000002",
       "name": "Verify HMAC",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [460, 300]
+      "position": [
+        440,
+        300
+      ]
     },
     {
       "parameters": {
@@ -45,7 +53,10 @@
       "name": "Audit Callback",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.2,
-      "position": [700, 300]
+      "position": [
+        940,
+        200
+      ]
     },
     {
       "parameters": {
@@ -57,15 +68,118 @@
       "name": "Respond",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [940, 300]
+      "position": [
+        1200,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "valid-signature",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "course-valid-hmac",
+      "name": "IF HMAC Valid",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ received: false, error: \"invalid_signature\" }) }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "course-reject-hmac",
+      "name": "Reject Unauthorized",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        940,
+        480
+      ]
     }
   ],
   "connections": {
-    "Webhook": { "main": [[{ "node": "Verify HMAC", "type": "main", "index": 0 }]] },
-    "Verify HMAC": { "main": [[{ "node": "Audit Callback", "type": "main", "index": 0 }]] },
-    "Audit Callback": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Verify HMAC",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify HMAC": {
+      "main": [
+        [
+          {
+            "node": "IF HMAC Valid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audit Callback": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF HMAC Valid": {
+      "main": [
+        [
+          {
+            "node": "Audit Callback",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject Unauthorized",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
-  "settings": { "executionOrder": "v1" },
+  "settings": {
+    "executionOrder": "v1"
+  },
   "active": false,
-  "tags": ["radar", "webhook"]
+  "tags": [
+    "radar",
+    "webhook"
+  ]
 }

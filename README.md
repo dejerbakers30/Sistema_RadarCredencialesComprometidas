@@ -79,3 +79,9 @@ La cuenta Owner de n8n se configura por separado en su interfaz.
 - **Contenciones:** registra los restablecimientos de contraseña y la revocación de sesiones, permite solicitar contenciones manuales y consultar resultados y reintentos.
 - **Reportes:** genera reportes operacionales en PDF, de gestión en Word y ejecutivos en Excel para su descarga.
 - **Auditoría inmutable:** registra las acciones del sistema en una cadena de hashes. Los triggers de PostgreSQL impiden actualizar o eliminar registros, y la verificación de integridad permite detectar alteraciones de la cadena.
+
+## Laboratorio de entrenamiento IA
+
+En **Análisis → Laboratorio IA** (`/training`) se pueden importar características sin contraseñas raw, revisar EDA, parametrizar M1/M2/M3, entrenar en un proceso independiente y comparar resultados trazables. El tema claro y oscuro se cambia desde el encabezado.
+
+La clasificación de debilidad es auxiliar: no invalida exposiciones confirmadas ni omite su contención. Los modelos de datos sintéticos solo verifican funcionamiento y no se activan. Consulta el [protocolo, requisitos y guía de uso](docs/MOTOR_ENTRENAMIENTO.md).

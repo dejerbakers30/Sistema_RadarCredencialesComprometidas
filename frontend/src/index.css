@@ -19,3 +19,38 @@
   ::selection { background: hsl(var(--primary) / 0.15); }
   :focus-visible { @apply outline-none ring-2 ring-primary ring-offset-2; }
 }
+
+@layer base {
+  .dark {
+    --background: 216 36% 10%;
+    --foreground: 214 32% 92%;
+    --muted: 216 30% 16%;
+    --muted-foreground: 215 19% 66%;
+    --primary: 219 92% 72%;
+    --primary-foreground: 222 47% 11%;
+    --border: 216 24% 23%;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+  }
+}
+/* Compatibilidad del tema con las vistas existentes que utilizan la paleta slate. */
+@layer utilities {
+  .dark .bg-white, .dark .bg-white\/95, .dark .bg-white\/90 { background-color: #111c2d; }
+  .dark .bg-slate-50, .dark .bg-slate-100 { background-color: #0e1726; }
+  .dark .bg-slate-200 { background-color: #243247; }
+  .dark .text-slate-950, .dark .text-slate-900, .dark .text-slate-800, .dark .text-slate-700 { color: #e2e9f2; }
+  .dark .text-slate-600, .dark .text-slate-500, .dark .text-slate-400 { color: #a7b5ca; }
+  .dark .border-slate-100, .dark .border-slate-200, .dark .border-slate-300 { border-color: #29374c; }
+  .dark .bg-blue-50, .dark .bg-blue-100 { background-color: #192e50; }
+  .dark .text-blue-700, .dark .text-blue-600 { color: #93b6ff; }
+  .dark .bg-red-50, .dark .bg-red-100 { background-color: #3c2331; }
+  .dark .text-red-700, .dark .text-red-600 { color: #ffacb9; }
+  .dark .bg-emerald-50, .dark .bg-emerald-100, .dark .bg-green-50 { background-color: #153b32; }
+  .dark .text-emerald-700, .dark .text-emerald-600, .dark .text-green-700 { color: #6ee7b7; }
+  .dark .bg-amber-50, .dark .bg-amber-100 { background-color: #3c321c; }
+  .dark .text-amber-700, .dark .text-amber-600 { color: #f5ce7e; }
+  .dark .hover\:bg-slate-50:hover, .dark .hover\:bg-slate-100:hover { background-color: #213047; }
+  .dark .hover\:text-slate-950:hover { color: #f1f5f9; }
+  .dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: #29374c; }
+}

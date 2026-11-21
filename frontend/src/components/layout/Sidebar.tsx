@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, ShieldAlert, RefreshCcw, FileBarChart2, ScrollText, Users, Database, Bell, UserCircle, X, ShieldCheck } from "lucide-react";
+import { BrainCircuit, LayoutDashboard, ShieldAlert, RefreshCcw, FileBarChart2, ScrollText, Users, Database, Bell, UserCircle, X, ShieldCheck } from "lucide-react";
 import { useCan } from "@/hooks/useCan";
 import { cn } from "@/lib/utils";
 
@@ -15,7 +15,7 @@ export function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: boolean;
   const canReadSources = useCan("read", "sources");
   const groups: { label: string; items: Item[] }[] = [
     { label: "Operación", items: [{ to: "/dashboard", label: "Dashboard", icon: LayoutDashboard }, { to: "/leaks", label: "Filtraciones", icon: ShieldAlert, can: () => canReadLeaks }, { to: "/resets", label: "Contenciones", icon: RefreshCcw, can: () => canReadResets }] },
-    { label: "Análisis", items: [{ to: "/reports", label: "Reportes", icon: FileBarChart2, can: () => canReadReports }, { to: "/audit", label: "Auditoría", icon: ScrollText, can: () => canReadAudit }] },
+    { label: "Análisis", items: [{ to: "/training", label: "Laboratorio IA", icon: BrainCircuit, can: () => canReadReports }, { to: "/reports", label: "Reportes", icon: FileBarChart2, can: () => canReadReports }, { to: "/audit", label: "Auditoría", icon: ScrollText, can: () => canReadAudit }] },
     { label: "Administración", items: [{ to: "/users", label: "Usuarios", icon: Users, can: () => canReadUsers }, { to: "/roles", label: "Roles", icon: ShieldCheck, can: () => canReadRoles }, { to: "/sources", label: "Fuentes", icon: Database, can: () => canReadSources }] },
     { label: "Cuenta", items: [{ to: "/notifications", label: "Notificaciones", icon: Bell }, { to: "/profile", label: "Perfil", icon: UserCircle }] },
   ];
@@ -29,7 +29,7 @@ export function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: boolean;
       <nav className="flex-1 space-y-6 overflow-y-auto p-4">
         {groups.map((group) => <div key={group.label}><p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">{group.label}</p><div className="space-y-1">{group.items.filter((i) => !i.can || i.can()).map(({ to, label, icon: Icon }) => <NavLink key={to} to={to} onClick={onClose} className={({ isActive }) => cn("group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors", isActive ? "bg-blue-50 text-primary" : "text-slate-600 hover:bg-slate-50 hover:text-slate-950")}><Icon className="h-4 w-4" />{label}</NavLink>)}</div></div>)}
       </nav>
-      <div className="border-t border-slate-100 p-4 text-xs text-slate-400">Centro de operaciones<br /><span className="text-emerald-600">● Sistema operativo</span></div>
+      <div className="border-t border-slate-100 p-4 text-xs text-slate-400">Centro de operaciones<br /><span>Radar de credenciales comprometidas</span></div>
     </aside>
   </>;
 }

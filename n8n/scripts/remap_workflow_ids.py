@@ -202,10 +202,12 @@ def main() -> int:
             parameters = node.get("parameters", {})
 
             if node.get("type") == "n8n-nodes-base.executeWorkflow":
-                parameters["workflowId"] = resolve_alias(
-                    parameters.get("workflowId"),
-                    names,
-                )
+                resolved = resolve_alias(parameters.get("workflowId"), names)
+                if isinstance(resolved, str):
+                    resolved = {"__rl": True, "value": resolved, "mode": "id"}
+                parameters["workflowId"] = resolved
+                parameters.setdefault("source", "database")
+
 
         remap_credentials(workflow, credentials)
 

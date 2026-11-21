@@ -41,13 +41,14 @@ async def test_containment_with_low_risk(db):
     db.flush()
 
     idp = AsyncMock()
-    # Password de bajo riesgo
+    idp.reset_password.return_value = IdPResult(True)
+    idp.revoke_sessions.return_value = IdPResult(True)
+    # Debilidad baja no invalida una exposición confirmada.
     reset = await contain_leak(db, idp, hit.id, password_candidata="k9#mP$2vL!9xQ8#zM1")
 
-    # Debe omitir llamada a IdP y no bloquear
-    idp.reset_password.assert_not_called()
-    idp.revoke_sessions.assert_not_called()
-    assert hit.estado == LeakEstado.falso_positivo
+    idp.reset_password.assert_called_once_with("safe.user@example.com")
+    idp.revoke_sessions.assert_called_once_with("safe.user@example.com")
+    assert hit.estado == LeakEstado.contenido
     assert hit.score_riesgo == "Bajo"
     assert reset.resultado.value == "exitoso"
 
